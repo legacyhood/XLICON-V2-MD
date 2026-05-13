@@ -38,12 +38,13 @@ module.exports = {
 
 ╭─── 👤 *USER TOOLS* ────
 ┃ ${prefix}profile @user — Download profile pic
-┃ ${prefix}info @user — User/group info
+┃ ${prefix}info @user — User or group info
 ┃ ${prefix}anonread — Toggle ghost mode (no blue ticks)
 ╰───────────────────────
 
 ╭─── 👻 *PRIVACY & STATUS* ─
 ┃ ${prefix}anonview — View statuses anonymously
+┃ ${prefix}viewonce — Reveal view-once (sent to your DM)
 ┃ ${prefix}antidelete — Catch deleted messages
 ╰───────────────────────
 
@@ -53,14 +54,11 @@ module.exports = {
 ┃ ${prefix}toimg — Sticker to image
 ┃ ${prefix}tts — Text to voice
 ┃ ${prefix}poll — Create a poll
-┃ ${prefix}viewonce — View once media
 ┃ ${prefix}couplepp — Couple profile pics
 ╰───────────────────────
 
-╭─── 👥 *GROUP TOOLS* ───
-┃ ${prefix}tagall — Tag all members
-┃ ${prefix}tagme — Tag yourself
-┃ ${prefix}mention — Mention someone
+╭─── 👥 *GROUP ADMIN* ───
+┃ ${prefix}tagall — Mention all members
 ┃ ${prefix}kick @user — Remove from group
 ┃ ${prefix}add 233XX — Add by number
 ┃ ${prefix}promote @user — Make admin
@@ -68,17 +66,25 @@ module.exports = {
 ┃ ${prefix}mute — Lock group (admins only)
 ┃ ${prefix}unmute — Unlock group
 ┃ ${prefix}grouplink — Get invite link
-┃ ${prefix}grouplink revoke — Reset link
+┃ ${prefix}grouplink revoke — Reset invite link
+╰───────────────────────
+
+╭─── 🛡️ *GROUP PROTECTION* ─
+┃ ${prefix}antispam on/off — Block message spam
+┃ ${prefix}antilink on/off — Block links from members
+┃ ${prefix}warn @user — Warn a member
+┃ ${prefix}warns @user — Check warn count
+┃ ${prefix}clearwarns @user — Reset warns
+┃ ⚠️ ${process.env.WARN_LIMIT || 3} warns = auto-kick
 ╰───────────────────────
 
 ╭─── ⚙️ *OWNER ONLY* ────
 ┃ ${prefix}broadcast — Send to all groups
 ┃ ${prefix}exec — Run shell/JS code
 ┃ ${prefix}logger — Toggle message log
-┃ ${prefix}autoreact — Auto react toggle
 ╰───────────────────────
 
-> Prefix: *${prefix}* • Works in DMs & Groups`;
+> Prefix: *${prefix}* • Commands typed by you are hidden from others`;
 
         await m.reply(menu);
     }
