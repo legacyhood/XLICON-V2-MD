@@ -260,45 +260,66 @@ function startBot() {
             }
            
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
-                if (type !== 'notify') return;
-                
+                // Accept notify (incoming) and append (sent from other devices/self)
+                if (type !== 'notify' && type !== 'append') return;
+
                 for (const rawMsg of messages) {
-                    if (rawMsg.key.remoteJid === 'status@broadcast' && rawMsg.key.participant) {
-                        try {
-                            await sock.readMessages([rawMsg.key]);
-                            continue;
-                        } catch (err) {
-                            console.log('Status viewer error:', err.message);
+                    // Skip status broadcasts
+                    if (rawMsg.key.remoteJid === 'status@broadcast') {
+                        try { await sock.readMessages([rawMsg.key]); } catch {}
+                        continue;
+                    }
+
+                    // Skip if no message content
+                    if (!rawMsg.message) continue;
+
+                    // Unwrap nested message types (viewOnceMessageV2Extension, ephemeralMessage, etc.)
+                    const unwrap = (msg) => {
+                        const wrappers = ['ephemeralMessage','viewOnceMessage','viewOnceMessageV2',
+                                          'viewOnceMessageV2Extension','documentWithCaptionMessage',
+                                          'editedMessage'];
+                        for (const w of wrappers) {
+                            if (msg[w]?.message) return unwrap(msg[w].message);
+                        }
+                        return msg;
+                    };
+                    rawMsg.message = unwrap(rawMsg.message);
+
+                    let m;
+                    try {
+                        m = await serializeMessage(sock, rawMsg);
+                    } catch (err) {
+                        console.error('[Handler] serializeMessage error:', err.message);
+                        continue;
+                    }
+
+                    console.error(`[MSG] from:${m.sender} body:"${m.body}" prefix:"${global.BOT_PREFIX}"`);
+
+                    if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
+                        const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
+                        const commandName = args.shift().toLowerCase();
+                        console.error(`[CMD] command:"${commandName}" plugins:${plugins.size}`);
+                        const plugin = plugins.get(commandName);
+
+                        if (plugin) {
+                            try {
+                                await plugin.execute(sock, m, args);
+                            } catch (err) {
+                                console.error(`[CMD] Plugin error (${commandName}):`, err.message);
+                                await m.reply('⚠️ Error running command: ' + commandName);
+                            }
+                        } else {
+                            console.error(`[CMD] No plugin found for: "${commandName}"`);
                         }
                     }
-                }
 
-                const rawMsg = messages[0];
-                if (!rawMsg.message) return;
-
-                const m = await serializeMessage(sock, rawMsg);
-                
-                if (m.body.startsWith(global.BOT_PREFIX)) {
-                    const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
-                    const commandName = args.shift().toLowerCase();
-                    const plugin = plugins.get(commandName);
-                    
-                    if (plugin) {
-                        try { 
-                            await plugin.execute(sock, m, args); 
-                        } catch (err) { 
-                            console.error(`Plugin error (${commandName}):`, err); 
-                            await m.reply('Error running command.'); 
-                        }
-                    }
-                }
-                
-                for (const plugin of plugins.values()) {
-                    if (typeof plugin.onMessage === 'function') {
-                        try { 
-                            await plugin.onMessage(sock, m); 
-                        } catch (err) { 
-                            console.error(`onMessage error (${plugin.name}):`, err); 
+                    for (const plugin of plugins.values()) {
+                        if (typeof plugin.onMessage === 'function') {
+                            try {
+                                await plugin.onMessage(sock, m);
+                            } catch (err) {
+                                console.error(`[onMessage] error (${plugin.name}):`, err.message);
+                            }
                         }
                     }
                 }
