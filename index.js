@@ -12,15 +12,71 @@ global.generateWAMessageFromContent = generateWAMessageFromContent;
 global.proto = proto;
 require('./config')
 
-if (!fs.existsSync(__dirname + '/session/creds.json') && global.sessionid) {
+// Restore session: check SESSION_ID env var first, then MongoDB
+(async () => {
+    if (!fs.existsSync(__dirname + '/session/creds.json')) {
+        let sessionJson = global.sessionid || null;
+        if (!sessionJson && process.env.MONGO_URI) {
+            console.log('[Session] No local session — checking MongoDB...');
+            sessionJson = await loadSessionFromMongo();
+        }
+        if (sessionJson) {
+            try {
+                const sessionData = JSON.parse(sessionJson);
+                fs.mkdirSync(__dirname + '/session', { recursive: true });
+                fs.writeFileSync(__dirname + '/session/creds.json', JSON.stringify(sessionData, null, 2));
+                console.log('[Session] Session restored successfully');
+            } catch (err) {
+                console.error('[Session] Error restoring session:', err);
+            }
+        }
+    }
+})();
+
+
+// ── MongoDB session backup ──────────────────────────────────────────────────
+const { MongoClient } = require('mongodb');
+
+async function saveSessionToMongo(sessionJson) {
+    if (!process.env.MONGO_URI) return;
+    let client;
     try {
-        const sessionData = JSON.parse(global.sessionid);
-        fs.mkdirSync(__dirname + '/session', { recursive: true });
-        fs.writeFileSync(__dirname + '/session/creds.json', JSON.stringify(sessionData, null, 2));
-    } catch (err) {
-        console.error('Error restoring session:', err);
+        client = new MongoClient(process.env.MONGO_URI);
+        await client.connect();
+        const db = client.db('xlicon_bot');
+        await db.collection('sessions').replaceOne(
+            { _id: 'main_session' },
+            { _id: 'main_session', session: sessionJson, updatedAt: new Date() },
+            { upsert: true }
+        );
+        console.log('[MongoDB] Session backed up successfully');
+    } catch (e) {
+        console.error('[MongoDB] Session backup failed:', e.message);
+    } finally {
+        if (client) await client.close();
     }
 }
+
+async function loadSessionFromMongo() {
+    if (!process.env.MONGO_URI) return null;
+    let client;
+    try {
+        client = new MongoClient(process.env.MONGO_URI);
+        await client.connect();
+        const db = client.db('xlicon_bot');
+        const doc = await db.collection('sessions').findOne({ _id: 'main_session' });
+        if (doc && doc.session) {
+            console.log('[MongoDB] Session loaded from database');
+            return doc.session;
+        }
+    } catch (e) {
+        console.error('[MongoDB] Session load failed:', e.message);
+    } finally {
+        if (client) await client.close();
+    }
+    return null;
+}
+// ───────────────────────────────────────────────────────────────────────────
 
 global.BOT_PREFIX = '.';
 const AUTH_FOLDER = './session';
@@ -162,6 +218,12 @@ function startBot() {
             sock.ev.on('creds.update', async () => {
                 await saveCreds();
                 console.log('Credentials updated');
+                // Backup session to MongoDB after every credential change
+                const credsPath = path.join(AUTH_FOLDER, 'creds.json');
+                if (fs.existsSync(credsPath)) {
+                    const sessionJson = fs.readFileSync(credsPath, 'utf8');
+                    await saveSessionToMongo(sessionJson);
+                }
             });
 
             const plugins = new Map();
