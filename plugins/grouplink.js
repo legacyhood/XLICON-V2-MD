@@ -4,10 +4,10 @@ module.exports = {
     description: 'Get or revoke the group invite link',
     async execute(sock, m, args) {
         if (!m.isGroup) return m.reply('❌ This command only works in groups.');
-        if (!m.isAdmin) return m.reply('❌ Only group admins can use this command.');
+        if (!m.isAdmin) return m.reply('❌ You need to be a group admin to use this command.');
         const meta = await sock.groupMetadata(m.from).catch(() => null);
         if (!meta) return m.reply('❌ Could not fetch group info.');
-        if (!m.isBotAdmin) return m.reply('❌ I need to be an admin to get the invite link.');
+        if (!m.isBotAdmin) return m.reply('❌ The bot is not a group admin. Please promote the bot first, then try again.');
         const revoke = args[0]?.toLowerCase() === 'revoke' || args[0]?.toLowerCase() === 'reset';
         await m.react('⏳');
         if (revoke) await sock.groupRevokeInvite(m.from);
