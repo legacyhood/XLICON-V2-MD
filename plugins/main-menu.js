@@ -1,6 +1,6 @@
 module.exports = {
     name: 'menu',
-    aliases: ['commands', 'list', 'cmds', 'help'],
+    aliases: ['commands', 'list', 'cmds'],
     description: 'Show all available bot commands',
     async execute(sock, m) {
         const p = global.BOT_PREFIX || '.';
@@ -88,6 +88,8 @@ module.exports = {
 ╰──────────────────────────
 
 ╭─── 👥 *GROUP ADMIN* ─────
+┃ 🔐 _Admin-only commands_
+┃ ${p}admins — List all group admins
 ┃ ${p}tagall [msg] — Mention everyone
 ┃ ${p}kick @user — Remove member
 ┃ ${p}add 2348XX — Add by number
@@ -96,9 +98,14 @@ module.exports = {
 ┃ ${p}mute / ${p}unmute — Lock/unlock
 ┃ ${p}grouplink [revoke] — Invite link
 ┃ ${p}rules — Show/set group rules
+┃ ${p}welcome on/off — Toggle greet
+┃ ${p}welcome msg <text> — Custom msg
+┃ ${p}welcome goodbye <text> — Bye msg
+┃ ${p}welcome test — Preview
 ╰──────────────────────────
 
 ╭─── 🛡️ *GROUP PROTECTION* ─
+┃ 🔐 _Admin-only commands_
 ┃ ${p}antispam on/off — Block spam
 ┃ ${p}antilink on/off — Block links
 ┃ ${p}filter add <word> — Block word
@@ -109,13 +116,6 @@ module.exports = {
 ┃ ⚠️ ${process.env.WARN_LIMIT||3} warns = auto-kick
 ╰──────────────────────────
 
-╭─── 👋 *WELCOME SYSTEM* ──
-┃ ${p}welcome on/off — Toggle greet
-┃ ${p}welcome msg <text> — Custom msg
-┃ ${p}welcome goodbye <text> — Bye msg
-┃ ${p}welcome test — Preview
-╰──────────────────────────
-
 ╭─── 🤖 *AUTO FEATURES* ───
 ┃ ${p}autoreply add hi|Hello! — Add reply
 ┃ ${p}autoreply list/remove/clear
@@ -124,10 +124,10 @@ module.exports = {
 ╭─── ⚙️ *OWNER ONLY* ───────
 ┃ ${p}setowner — Show current owners
 ┃ ${p}setowner add <number> — Add owner
-┃ ${p}setowner remove <number> — Remove owner
-┃ ${p}setowner set <number> — Replace all owners
+┃ ${p}setowner remove <number> — Remove
+┃ ${p}setowner set <number> — Replace all
 ┃ ${p}broadcast <msg> — Send to all groups
-┃ ${p}broadcast (reply) — Broadcast quoted msg
+┃ ${p}broadcast (reply) — Broadcast quoted
 ┃ ${p}broadcast list — Show all groups
 ┃ ${p}anonread — Ghost mode toggle
 ╰──────────────────────────
