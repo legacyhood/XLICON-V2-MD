@@ -59,6 +59,27 @@ async function loadSessionFromMongo() {
     } catch (e) { console.error('[MongoDB] Session load failed:', e.message); return null; }
 }
 
+// ── MongoDB: load status cache on startup ────────────────────────────────────
+async function loadStatusCacheFromMongo() {
+    if (!process.env.MONGO_URI) return;
+    try {
+        const { MongoClient } = require('mongodb');
+        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
+        await c.connect();
+        const docs = await c.db('xlicon_bot').collection('status_cache').find({}).toArray();
+        await c.close();
+        global.statusCache = global.statusCache || new Map();
+        for (const doc of docs) {
+            const entries = (doc.entries || []).map(e => ({
+                ...e,
+                buffer: e.buffer ? Buffer.from(e.buffer.buffer || e.buffer) : undefined
+            }));
+            global.statusCache.set(doc._id, entries);
+        }
+        if (docs.length) console.log(`[MongoDB] Status cache restored: ${docs.length} contact(s)`);
+    } catch (e) { console.error('[MongoDB] Status cache load failed:', e.message); }
+}
+
 // ── Restore session if needed ────────────────────────────────────────────────
 (async () => {
     if (!fs.existsSync(__dirname + '/session/creds.json')) {
@@ -86,7 +107,7 @@ function loadPrefix() {
             }
         }
     } catch (_) {}
-    startBot();
+    loadStatusCacheFromMongo().catch(() => {}).finally(() => startBot());
 }
 
 function startBot() {
