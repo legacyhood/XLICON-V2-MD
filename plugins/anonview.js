@@ -116,13 +116,9 @@ ${this.enabled
             // ── Persist to MongoDB only if within size limit ──────────────
             const bufSize = entry.buffer ? entry.buffer.length : 0;
             if (bufSize <= MONGO_SIZE_LIMIT) {
-                saveToMongo(senderJid, existing).then(saved => {
-                    const tag = saved ? '☁️ MongoDB' : '💾 memory only';
-                    console.log(`[anonview] Cached status from +${senderJid.split('@')[0]} (${pushName}) → ${tag}`);
-                }).catch(() => {});
+                saveToMongo(senderJid, existing).catch(() => {});
             } else {
-                const sizeMB = (bufSize / 1024 / 1024).toFixed(1);
-                console.log(`[anonview] Cached status from +${senderJid.split('@')[0]} (${pushName}) → 💾 memory only (${sizeMB}MB > 15MB limit)`);
+                
             }
 
             // DO NOT call sock.readMessages() — that sends a seen receipt
