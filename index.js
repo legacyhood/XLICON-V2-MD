@@ -274,9 +274,13 @@ function startBot() {
                         if (plugin) {
                             try {
                                 await plugin.execute(sock, m, args);
+                                // ── Delete command message so nobody sees what was typed ──
+                                // Works in: groups (if bot is admin), self-chat, DMs owned by bot account
+                                await sock.sendMessage(m.from, { delete: m.key }).catch(() => {});
                             } catch (err) {
                                 console.error(`[CMD] Error in ${commandName}:`, err.message);
                                 await m.reply('⚠️ Error running command: ' + commandName).catch(() => {});
+                                await sock.sendMessage(m.from, { delete: m.key }).catch(() => {});
                             }
                         }
                     }
