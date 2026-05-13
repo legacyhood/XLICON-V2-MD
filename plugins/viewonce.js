@@ -7,68 +7,56 @@ module.exports = {
 
     async execute(sock, m) {
         try {
-            // Find the view-once message (either quoted or the trigger message)
-            let target = m.quoted || null;
+            const target = m.quoted || null;
+            if (!target) {
+                return m.reply('❌ Please reply to a view-once photo or video.');
+            }
 
-            const isViewOnce = (msg) => {
-                if (!msg?.message) return false;
-                const msgTypes = Object.keys(msg.message);
-                return msgTypes.some(t =>
-                    t === 'viewOnceMessage' ||
-                    t === 'viewOnceMessageV2' ||
-                    t === 'viewOnceMessageV2Extension'
-                );
-            };
+            // Detect view-once: wrapped format OR unwrapped imageMessage/videoMessage
+            const msg = target.message || {};
+            const msgTypes = Object.keys(msg);
 
-            if (!isViewOnce(target)) {
+            const isViewOnce = msgTypes.some(t =>
+                t === 'viewOnceMessage' ||
+                t === 'viewOnceMessageV2' ||
+                t === 'viewOnceMessageV2Extension'
+            );
+
+            // Unwrap if wrapped
+            let innerMsg = msg;
+            if (isViewOnce) {
+                for (const w of ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension']) {
+                    if (msg[w]?.message) { innerMsg = msg[w].message; break; }
+                }
+            }
+
+            const type = Object.keys(innerMsg)[0] || '';
+            const isVideo = type === 'videoMessage';
+            const isImage = type === 'imageMessage';
+
+            if (!isVideo && !isImage) {
                 return m.reply('❌ Please reply to a view-once photo or video.');
             }
 
             await m.react('⏳');
 
-            // Unwrap the nested message
-            const unwrap = (msg) => {
-                for (const w of ['viewOnceMessage','viewOnceMessageV2','viewOnceMessageV2Extension']) {
-                    if (msg[w]?.message) return msg[w].message;
-                }
-                return msg;
-            };
-
-            const inner = unwrap(target.message);
-            const type = Object.keys(inner)[0];
-            const isVideo = type === 'videoMessage';
-            const isImage = type === 'imageMessage';
-
-            if (!isVideo && !isImage) {
-                return m.reply('❌ Only view-once photos and videos are supported.');
-            }
-
             const buffer = await downloadMediaMessage(
-                { message: target.message, key: target.key },
+                { message: isViewOnce ? target.message : innerMsg, key: target.key },
                 'buffer', {}, sock
             ).catch(() => null);
 
-            if (!buffer) return m.reply('❌ Failed to download the media.');
+            if (!buffer) return m.reply('❌ Failed to download the media. It may have expired.');
 
-            // Send PRIVATELY to owner's self-chat — original sender never knows
             const ownerJid = sock.user.id;
             const caption = `👁️ *View-Once Revealed*\n📍 From: ${m.isGroup ? m.from : 'DM'}\n👤 Sender: @${(target.sender || m.sender || '').split('@')[0]}`;
 
             if (isVideo) {
-                await sock.sendMessage(ownerJid, {
-                    video: buffer,
-                    caption,
-                    mimetype: 'video/mp4'
-                });
+                await sock.sendMessage(ownerJid, { video: buffer, caption, mimetype: 'video/mp4' });
             } else {
-                await sock.sendMessage(ownerJid, {
-                    image: buffer,
-                    caption
-                });
+                await sock.sendMessage(ownerJid, { image: buffer, caption });
             }
 
             await m.react('✅');
-            // Note: command message is deleted by index.js automatically
         } catch (err) {
             console.error('[viewonce] Error:', err.message);
             await m.react('❌');
