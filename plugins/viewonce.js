@@ -9,7 +9,7 @@ module.exports = {
         try {
             const target = m.quoted || null;
             if (!target) {
-                return m.reply('❌ Please reply to a view-once photo or video.');
+                return m.react('❌');
             }
 
             // Detect view-once: wrapped format OR unwrapped imageMessage/videoMessage
@@ -35,7 +35,7 @@ module.exports = {
             const isImage = type === 'imageMessage';
 
             if (!isVideo && !isImage) {
-                return m.reply('❌ Please reply to a view-once photo or video.');
+                return m.react('❌');
             }
 
             await m.react('⏳');
@@ -45,9 +45,10 @@ module.exports = {
                 'buffer', {}, sock
             ).catch(() => null);
 
-            if (!buffer) return m.reply('❌ Failed to download the media. It may have expired.');
+            if (!buffer) return m.react('❌');
 
-            const ownerJid = sock.user.id;
+            // Send to owner's actual phone DM so they receive it directly
+            const ownerJid = (global.owners || [])[0] || sock.user.id;
             const caption = `👁️ *View-Once Revealed*\n📍 From: ${m.isGroup ? m.from : 'DM'}\n👤 Sender: @${(target.sender || m.sender || '').split('@')[0]}`;
 
             if (isVideo) {
