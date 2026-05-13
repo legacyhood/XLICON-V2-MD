@@ -2,7 +2,6 @@
  * Serialize Message
  * Created By ABZTECH
  * Follow https://github.com/abrahamdw882
- * Whatsapp : https://whatsapp.com/channel/0029VaMGgVL3WHTNkhzHik3c
  */
 
 const { downloadMediaMessage } = require('@whiskeysockets/baileys'); 
@@ -15,53 +14,47 @@ async function serializeMessage(sock, msg) {
     let body = '';
     const type = Object.keys(msg.message || {})[0] || '';
     
-   
     if (msg.message?.interactiveResponseMessage) {
         body = msg.message.interactiveResponseMessage.buttonId || 
-               msg.message.interactiveResponseMessage?.body?.text || 
-               '';
-    }
-   
-    else if (msg.message?.conversation) {
+               msg.message.interactiveResponseMessage?.body?.text || '';
+    } else if (msg.message?.conversation) {
         body = msg.message.conversation;
-    }
-    else if (msg.message?.extendedTextMessage?.text) {
+    } else if (msg.message?.extendedTextMessage?.text) {
         body = msg.message.extendedTextMessage.text;
-    }
-    else if (msg.message?.imageMessage?.caption) {
+    } else if (msg.message?.imageMessage?.caption) {
         body = msg.message.imageMessage.caption;
-    }
-    else if (msg.message?.videoMessage?.caption) {
+    } else if (msg.message?.videoMessage?.caption) {
         body = msg.message.videoMessage.caption;
-    }
-    else if (msg.message?.documentMessage?.caption) {
+    } else if (msg.message?.documentMessage?.caption) {
         body = msg.message.documentMessage.caption;
-    }
-    else if (msg.message?.buttonsResponseMessage?.selectedButtonId) {
+    } else if (msg.message?.buttonsResponseMessage?.selectedButtonId) {
         body = msg.message.buttonsResponseMessage.selectedButtonId;
-    }
-    else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
+    } else if (msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId) {
         body = msg.message.listResponseMessage.singleSelectReply.selectedRowId;
-    }
-    else if (msg.message?.templateButtonReplyMessage?.selectedId) {
+    } else if (msg.message?.templateButtonReplyMessage?.selectedId) {
         body = msg.message.templateButtonReplyMessage.selectedId;
     }
+
+    // Extract mentioned JIDs from context info
+    const mentionedJid = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
 
     const isMedia = ['imageMessage', 'videoMessage', 'documentMessage', 'audioMessage', 'stickerMessage'].includes(type);
     const mediaType = type.replace('Message', '').toLowerCase();
     const mimetype = msg.message?.[type]?.mimetype || null;
 
-    const groupMetadata = isGroup ? await sock.groupMetadata(from).catch(() => {}) : '';
+    const groupMetadata = isGroup ? await sock.groupMetadata(from).catch(() => null) : null;
 
     let quoted;
     const ctxInfo = msg.message?.extendedTextMessage?.contextInfo;
     if (ctxInfo?.quotedMessage) {
         const qMsg = ctxInfo.quotedMessage;
         const qType = Object.keys(qMsg)[0] || '';
+        const quotedSender = ctxInfo.participant || from;
         quoted = {
             key: { remoteJid: from, id: ctxInfo.stanzaId, participant: ctxInfo.participant || from },
             message: qMsg,
             type: qType,
+            sender: quotedSender,
             body: qMsg?.conversation || qMsg?.extendedTextMessage?.text || qMsg?.[qType]?.caption || '',
             isMedia: ['imageMessage','videoMessage','documentMessage','audioMessage','stickerMessage'].includes(qType),
             mediaType: qType.replace('Message','').toLowerCase(),
@@ -72,6 +65,7 @@ async function serializeMessage(sock, msg) {
 
     return {
         id: msg.key.id,
+        key: msg.key,
         from,
         sender,
         pushName,
@@ -84,7 +78,9 @@ async function serializeMessage(sock, msg) {
         isMedia,
         mediaType,
         mimetype,
+        mentionedJid,
         quoted,
+        message: msg.message,
         isButtonResponse: !!msg.message?.interactiveResponseMessage,
         buttonId: msg.message?.interactiveResponseMessage?.buttonId || null,
         reply: async (text, options={}) => await sock.sendMessage(from, { text, ...options }, { quoted: msg }),
