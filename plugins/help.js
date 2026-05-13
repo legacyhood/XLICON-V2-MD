@@ -39,22 +39,26 @@ module.exports = {
             toimg:      { desc: 'Convert a sticker back to an image', usage: `${prefix}toimg (reply to sticker)`, aliases: 'stickertoimg, stoi, unpack' },
             tts:        { desc: 'Convert text to a voice note', usage: `${prefix}tts Hello world`, aliases: 'voice' },
             poll:       { desc: 'Create a poll in the chat', usage: `${prefix}poll Question;Option1;Option2;Option3`, aliases: 'none' },
-            // Group Tools
-            tagall:     { desc: 'Mention all members in the group', usage: `${prefix}tagall\n${prefix}tagall Check this out!`, aliases: 'everyone' },
+            // Group Tools (Admin Only)
+            admins:     { desc: 'List all admins in the group. Shows owners and regular admins separately, and marks you and the bot', usage: `${prefix}admins`, aliases: 'adminlist, listadmins, groupadmins' },
+            tagall:     { desc: 'Mention all members in the group (admin only)', usage: `${prefix}tagall\n${prefix}tagall Check this out!`, aliases: 'everyone' },
             tagme:      { desc: 'Mention yourself in the chat', usage: `${prefix}tagme`, aliases: 'tag' },
-            kick:       { desc: 'Kick/remove a member (bot must be admin)', usage: `${prefix}kick @user\n${prefix}kick (reply to message)`, aliases: 'remove, ban' },
-            add:        { desc: 'Add a member by phone number (bot must be admin)', usage: `${prefix}add 2348XXXXXXXXX`, aliases: 'addmember' },
-            promote:    { desc: 'Promote a member to group admin (bot must be admin)', usage: `${prefix}promote @user`, aliases: 'makeadmin, admin' },
-            demote:     { desc: 'Demote an admin to regular member (bot must be admin)', usage: `${prefix}demote @user`, aliases: 'unadmin, removeadmin' },
-            mute:       { desc: 'Lock the group — only admins can send messages', usage: `${prefix}mute`, aliases: 'close, lock' },
-            unmute:     { desc: 'Unlock the group — everyone can send messages', usage: `${prefix}unmute`, aliases: 'open, unlock' },
-            grouplink:  { desc: 'Get or reset the group invite link', usage: `${prefix}grouplink\n${prefix}grouplink revoke`, aliases: 'invite, link' },
-            // Group Protection
-            antispam:   { desc: 'Toggle spam protection in the group', usage: `${prefix}antispam on\n${prefix}antispam off`, aliases: 'none' },
-            antilink:   { desc: 'Toggle link blocking in the group', usage: `${prefix}antilink on\n${prefix}antilink off`, aliases: 'none' },
-            warn:       { desc: `Warn a member. After ${process.env.WARN_LIMIT||3} warnings they are auto-kicked`, usage: `${prefix}warn @user\n${prefix}warn @user Spamming`, aliases: 'none' },
+            kick:       { desc: 'Kick/remove a member — admin only, bot must also be admin', usage: `${prefix}kick @user\n${prefix}kick (reply to message)`, aliases: 'remove, ban' },
+            add:        { desc: 'Add a member by phone number — admin only, bot must also be admin', usage: `${prefix}add 2348XXXXXXXXX`, aliases: 'addmember' },
+            promote:    { desc: 'Promote a member to group admin — admin only, bot must also be admin', usage: `${prefix}promote @user`, aliases: 'makeadmin, admin' },
+            demote:     { desc: 'Demote an admin to regular member — admin only, bot must also be admin', usage: `${prefix}demote @user`, aliases: 'unadmin, removeadmin' },
+            mute:       { desc: 'Lock the group — only admins can send messages (admin only)', usage: `${prefix}mute`, aliases: 'close, lock' },
+            unmute:     { desc: 'Unlock the group — everyone can send messages (admin only)', usage: `${prefix}unmute`, aliases: 'open, unlock' },
+            grouplink:  { desc: 'Get or reset the group invite link (admin only)', usage: `${prefix}grouplink\n${prefix}grouplink revoke`, aliases: 'invite, link' },
+            rules:      { desc: 'Show group rules. Admins can set or clear them', usage: `${prefix}rules\n${prefix}rules set 1. Be respectful\n${prefix}rules clear`, aliases: 'setrules, grouprules, rule' },
+            welcome:    { desc: 'Toggle and customise welcome/goodbye messages (admin only)', usage: `${prefix}welcome on\n${prefix}welcome off\n${prefix}welcome msg Hello {name}!\n${prefix}welcome goodbye Bye {name}!\n${prefix}welcome test`, aliases: 'setwelcome, goodbye, greet' },
+            // Group Protection (Admin Only)
+            antispam:   { desc: 'Toggle spam protection in the group (admin only)', usage: `${prefix}antispam on\n${prefix}antispam off`, aliases: 'as, spamprotect' },
+            antilink:   { desc: 'Toggle link blocking in the group (admin only)', usage: `${prefix}antilink on\n${prefix}antilink off`, aliases: 'al, linkprotect, nolink' },
+            filter:     { desc: 'Block specific words in the group — deletes messages and warns sender (admin only)', usage: `${prefix}filter add <word>\n${prefix}filter remove <word>\n${prefix}filter list\n${prefix}filter clear`, aliases: 'wordfilter, badword' },
+            warn:       { desc: `Warn a member (admin only). After ${process.env.WARN_LIMIT||3} warnings they are auto-kicked`, usage: `${prefix}warn @user\n${prefix}warn @user Spamming`, aliases: 'warning' },
             warns:      { desc: 'Check how many warnings a member has', usage: `${prefix}warns @user`, aliases: 'none' },
-            clearwarns: { desc: 'Reset all warnings for a member', usage: `${prefix}clearwarns @user`, aliases: 'none' },
+            clearwarns: { desc: 'Reset all warnings for a member (admin only)', usage: `${prefix}clearwarns @user`, aliases: 'resetwarn, unwarn, removewarn' },
             // Owner
             setowner:   {
                 desc: `Manage bot owner numbers from WhatsApp. Changes are saved to MongoDB and survive restarts. Only the current owner can use this.\n\n• (no args) — show current owners\n• add <number> — add a new owner\n• remove <number> — remove an owner\n• set <number> — replace all owners with one number`,
@@ -63,7 +67,7 @@ module.exports = {
             },
             broadcast:  {
                 desc: `Send a message or media to ALL groups the bot is in (owner only).\n\n• <message> — broadcast plain text\n• (reply to message/image/video) — broadcast that content\n• list — see all groups the bot is in`,
-                usage: `\${prefix}broadcast Your message here\n\${prefix}broadcast (reply to image/video/text)\n\${prefix}broadcast list`,
+                usage: `${prefix}broadcast Your message here\n${prefix}broadcast (reply to image/video/text)\n${prefix}broadcast list`,
                 aliases: 'bc, announce'
             },
             exec:       { desc: '(Owner) Execute JavaScript code on the server', usage: `${prefix}exec console.log("test")`, aliases: '>' },
@@ -78,6 +82,7 @@ module.exports = {
 Usage: *${prefix}help <command>*
 
 Examples:
+  ${prefix}help admins
   ${prefix}help anonview
   ${prefix}help statusdl
   ${prefix}help setowner
