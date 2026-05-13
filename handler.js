@@ -44,14 +44,31 @@ async function serializeMessage(sock, msg) {
 
     const groupMetadata = isGroup ? await sock.groupMetadata(from).catch(() => null) : null;
 
-    // Compute admin status
-    const senderNormalized = sender ? sender.replace(/:\d+@/, '@') : '';
-    const botNormalized = sock.user.id.replace(/:\d+@/, '@');
-    const adminList = groupMetadata
-        ? groupMetadata.participants.filter(p => p.admin).map(p => p.id.replace(/:\d+@/, '@'))
+    // Normalize a JID — strips device suffix (:14) but keeps domain (@s.whatsapp.net or @lid)
+    const norm = (jid) => (jid || '').replace(/:\d+@/, '@');
+
+    const senderNormalized = norm(sender);
+
+    // Bot identity: sock.user.id is the phone JID; Baileys also exposes a LID via creds.
+    // WhatsApp now reports group participants with LID (@lid) JIDs instead of phone JIDs,
+    // so we must check BOTH formats when looking the bot up in the admin list.
+    const botPhoneNorm = norm(sock.user?.id);
+    const botLidNorm   = norm(
+        sock.authState?.creds?.me?.lid ||   // preferred — set by newer Baileys builds
+        sock.user?.lid ||                    // fallback field some forks expose
+        ''
+    );
+
+    const adminParticipants = groupMetadata
+        ? groupMetadata.participants.filter(p => p.admin)
         : [];
-    const isAdmin = isGroup && adminList.includes(senderNormalized);
-    const isBotAdmin = isGroup && adminList.includes(botNormalized);
+    const adminNorms = adminParticipants.map(p => norm(p.id));
+
+    const isAdmin    = isGroup && adminNorms.includes(senderNormalized);
+    const isBotAdmin = isGroup && (
+        adminNorms.includes(botPhoneNorm) ||
+        (botLidNorm && adminNorms.includes(botLidNorm))
+    );
 
     let quoted;
     const ctxInfo = msg.message?.extendedTextMessage?.contextInfo;
