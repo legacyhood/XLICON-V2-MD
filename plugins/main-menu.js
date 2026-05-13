@@ -1,57 +1,63 @@
-const axios = require('axios');
+const os = require('os');
 
 module.exports = {
     name: 'menu',
-    description: 'Show available bot commands',
+    aliases: ['help', 'commands', 'list'],
+    description: 'Show all available bot commands',
 
     async execute(sock, m) {
-        const prefix = '.';
+        const prefix = global.BOT_PREFIX || '.';
+        const name = m.pushName || 'User';
 
-        const menuText = `
-            XLIOCN *ᴍᴜʟᴛɪᴅᴇᴠɪᴄᴇ*  
+        const uptime = process.uptime();
+        const hrs  = Math.floor(uptime / 3600);
+        const mins = Math.floor((uptime % 3600) / 60);
+        const secs = Math.floor(uptime % 60);
+        const uptimeStr = `${hrs}h ${mins}m ${secs}s`;
+        const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
 
-  ┌─ム *Available Commands*
-  ┃ ᪣  ${prefix}alive
-  ┃ ᪣  arise
-  ┃ ᪣  ${prefix}poll
-  ┃ ᪣  ${prefix}couplepp
-  ┃ ᪣  ${prefix}owner
-  ┃ ᪣   >
-  ┃ ᪣  ${prefix}ping
-  ┃ ᪣  ${prefix}sticker
-  ┃ ᪣  ${prefix}tagall
-  ┃ ᪣  ${prefix}tagme
-  ┃ ᪣  ${prefix}uptime
-  ┃ ᪣  ${prefix}tts
-  ╰─────────◆────────╯
-> 「 𝙏𝙞𝙢𝙚 - 𝙏𝙞𝙢𝙚𝙡𝙚𝙨𝙨 」
-        `.trim();
+        const now = new Date().toLocaleString('en-GB', { timeZone: process.env.TIME_ZONE || 'Africa/Lagos' });
 
-        const imgUrl = 'https://files.catbox.moe/uz899q.jpg';
-        const author = 'XLICON V2';
-        const botname = 'XLICON ᴍᴜʟᴛɪᴅᴇᴠɪᴄᴇ';
-        const sourceUrl = 'https://abztech.my.id/';
+        const menuText =
+`╭━━━━━━━━━━━━━━━━━━━━╮
+┃   🤖 *XLICON-V2-MD*   ┃
+╰━━━━━━━━━━━━━━━━━━━━╯
 
-        try {
-            const thumbnailBuffer = (await axios.get(imgUrl, { responseType: 'arraybuffer' })).data;
+👋 Hello *${name}*!
+⏰ ${now}
+🕐 Uptime: *${uptimeStr}*
+💾 Memory: *${mem} MB*
 
-            await m.send(menuText, {
-                contextInfo: {
-                    forwardingScore: 999,
-                    isForwarded: true,
-                    externalAdReply: {
-                        title: author,
-                        body: botname,
-                        thumbnail: thumbnailBuffer,
-                        mediaType: 1,
-                        renderLargerThumbnail: true,
-                        sourceUrl
-                    }
-                }
-            });
-        } catch (err) {
-            console.error('❌ Error sending menu:', err);
-            await m.reply('⚠️ Failed to send menu.');
-        }
+╭─── 📋 *GENERAL* ────
+┃ ${prefix}ping — Bot speed & stats
+┃ ${prefix}alive — Bot status check
+┃ ${prefix}uptime — How long running
+┃ ${prefix}menu — This menu
+┃ ${prefix}creator — Bot info
+╰─────────────────────
+
+╭─── 🎭 *FUN & TOOLS* ──
+┃ ${prefix}sticker — Make sticker
+┃ ${prefix}tts — Text to speech
+┃ ${prefix}poll — Create a poll
+┃ ${prefix}viewonce — View once media
+┃ ${prefix}autoreact — Auto reactions
+╰─────────────────────
+
+╭─── 👥 *GROUP TOOLS* ──
+┃ ${prefix}tagall — Tag all members
+┃ ${prefix}tagme — Tag yourself
+┃ ${prefix}couplepp — Couple profile pic
+┃ ${prefix}mention — Mention someone
+╰─────────────────────
+
+╭─── ⚙️ *OWNER ONLY* ───
+┃ ${prefix}exec — Run shell command
+┃ ${prefix}logger — Toggle message log
+╰─────────────────────
+
+> Prefix: *${prefix}*  |  Commands: *17*`;
+
+        await m.reply(menuText);
     }
 };
