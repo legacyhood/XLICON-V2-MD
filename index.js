@@ -90,6 +90,24 @@ let presenceInterval = null;
 let sock = null;
 let isConnecting = false;
 
+// ── Message store — fixes "Waiting for this message" on self-chat ──────────
+// Baileys needs getMessage() to supply encryption keys during retries.
+// Without it, messages sent TO the bot's own number can't be decrypted
+// by the phone, showing "Waiting for this message".
+const msgStore = new Map();
+const MSG_STORE_LIMIT = 500; // keep last 500 messages to avoid memory bloat
+
+function storeMessage(msg) {
+    if (!msg?.key?.id || !msg.message) return;
+    msgStore.set(msg.key.id, msg.message);
+    // Trim oldest entries when limit exceeded
+    if (msgStore.size > MSG_STORE_LIMIT) {
+        const firstKey = msgStore.keys().next().value;
+        msgStore.delete(firstKey);
+    }
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 function loadPrefix() {
     const configPath = path.join(__dirname, 'config.json');
     if (fs.existsSync(configPath)) {
@@ -137,13 +155,22 @@ function startBot() {
             
             sock = makeWASocket({
                 version, 
-                logger: pino({ level: 'info' }),
+                logger: pino({ level: 'silent' }),
                 auth: state,
                 printQRInTerminal: true,
                 keepAliveIntervalMs: 10000,
                 markOnlineOnConnect: true,
                 syncFullHistory: false,
-                browser: ['Bot', 'Chrome', '1.0.0']
+                browser: ['Bot', 'Chrome', '1.0.0'],
+                // FIX: provide getMessage so Baileys can supply decryption keys
+                // when WhatsApp requests a retry. Without this, the phone shows
+                // "Waiting for this message" for replies sent to the bot's own number.
+                getMessage: async (key) => {
+                    if (msgStore.has(key.id)) {
+                        return msgStore.get(key.id);
+                    }
+                    return proto.Message.fromObject({});
+                }
             });
             
             sock.ev.on('connection.update', async (update) => {
@@ -272,6 +299,9 @@ function startBot() {
 
                     // Skip if no message content
                     if (!rawMsg.message) continue;
+
+                    // Store message for getMessage() key retrieval (fixes self-chat decryption)
+                    storeMessage(rawMsg);
 
                     // Unwrap nested message types (viewOnceMessageV2Extension, ephemeralMessage, etc.)
                     const unwrap = (msg) => {
