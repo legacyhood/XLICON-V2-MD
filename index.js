@@ -260,26 +260,103 @@ function startBot() {
 
 const server = http.createServer((req, res) => {
     const url = req.url;
-    
-    if (url === '/api/status') {
-        res.writeHead(200, { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        });
-        res.end(JSON.stringify({ 
-            status: botStatus,
-            hasQR: !!latestQR,
-            qr: latestQR,
-            prefix: global.BOT_PREFIX,
-            timestamp: new Date().toISOString(),
-            uptime: process.uptime()
-        }));
+
+    if (url === '/' || url === '/qr') {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end(`<!DOCTYPE html>
+<html>
+<head>
+  <title>XLICON-V2-MD — Scan QR</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body{font-family:sans-serif;background:#111;color:#eee;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box}
+    h1{color:#25d366;margin-bottom:4px}
+    p{color:#aaa;margin:4px 0 20px}
+    #qr img{max-width:280px;border:6px solid #25d366;border-radius:12px;background:#fff;padding:10px}
+    #qr .msg{font-size:1.2em;color:#25d366;padding:40px 20px;border:2px dashed #25d366;border-radius:12px;text-align:center}
+    #status{margin-top:16px;padding:8px 20px;border-radius:20px;font-weight:bold}
+    .connected{background:#25d366;color:#000}
+    .waiting{background:#333;color:#aaa}
+    #session-box{display:none;margin-top:24px;width:100%;max-width:600px}
+    #session-box h3{color:#25d366}
+    #session-box textarea{width:100%;height:120px;background:#222;color:#eee;border:1px solid #25d366;border-radius:8px;padding:10px;font-size:12px;resize:vertical;box-sizing:border-box}
+    #session-box button{margin-top:8px;padding:10px 24px;background:#25d366;color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:bold;font-size:14px}
+    #copied{display:none;color:#25d366;margin-left:10px;font-weight:bold}
+  </style>
+</head>
+<body>
+  <h1>XLICON-V2-MD Bot</h1>
+  <p>Scan the QR code with WhatsApp to connect your bot</p>
+  <div id="qr"><div class="msg">⏳ Loading...</div></div>
+  <div id="status" class="waiting">Starting...</div>
+  <div id="session-box">
+    <h3>✅ Bot Connected — Save your Session ID</h3>
+    <p style="color:#aaa;font-size:13px">Copy this and set it as <strong>SESSION_ID</strong> in Railway so the bot reconnects after restarts without scanning again.</p>
+    <textarea id="session-val" readonly></textarea><br>
+    <button onclick="copySession()">Copy SESSION_ID</button>
+    <span id="copied">Copied!</span>
+  </div>
+  <script>
+    function copySession(){
+      const t=document.getElementById('session-val');
+      t.select();document.execCommand('copy');
+      const c=document.getElementById('copied');
+      c.style.display='inline';
+      setTimeout(()=>c.style.display='none',2000);
+    }
+    async function poll(){
+      try{
+        const r=await fetch('/api/status');
+        const d=await r.json();
+        const qd=document.getElementById('qr');
+        const sd=document.getElementById('status');
+        if(d.status==='connected'){
+          qd.innerHTML='<div class="msg">✅ Connected!</div>';
+          sd.textContent='Connected';sd.className='connected';
+          const sr=await fetch('/api/session');
+          const sj=await sr.json();
+          if(sj.session){
+            document.getElementById('session-box').style.display='block';
+            document.getElementById('session-val').value=sj.session;
+          }
+        } else if(d.hasQR&&d.qr){
+          qd.innerHTML='<img src="'+d.qr+'" alt="QR Code">';
+          sd.textContent='Waiting for scan...';sd.className='waiting';
+        } else {
+          qd.innerHTML='<div class="msg">⏳ Starting bot, please wait...</div>';
+          sd.textContent=d.status||'starting';sd.className='waiting';
+        }
+      }catch(e){}
+      setTimeout(poll,4000);
+    }
+    poll();
+  </script>
+</body>
+</html>`);
+
+    } else if (url === '/api/status') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ status: botStatus, hasQR: !!latestQR, qr: latestQR, prefix: global.BOT_PREFIX, timestamp: new Date().toISOString(), uptime: process.uptime() }));
+
+    } else if (url === '/api/session') {
+        const credsPath = path.join(__dirname, 'session', 'creds.json');
+        if (fs.existsSync(credsPath)) {
+            try {
+                const session = fs.readFileSync(credsPath, 'utf8');
+                res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+                res.end(JSON.stringify({ session: session.trim() }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Could not read session' }));
+            }
+        } else {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'No session yet — connect the bot first by scanning the QR at /' }));
+        }
+
     } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-            error: 'Not found',
-            available_endpoints: ['/api/status']
-        }));
+        res.end(JSON.stringify({ error: 'Not found', available_endpoints: ['/', '/api/status', '/api/session'] }));
     }
 });
 
