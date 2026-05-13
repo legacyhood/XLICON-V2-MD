@@ -5,13 +5,12 @@ module.exports = {
 
     async execute(sock, m) {
         if (!m.isGroup) return m.reply('❌ This command only works in groups.');
+        if (!m.isAdmin) return m.reply('❌ Only group admins can use this command.');
 
-        const botId = sock.user.id.replace(/:\d+@/, '@');
         const meta = await sock.groupMetadata(m.from).catch(() => null);
         if (!meta) return m.reply('❌ Could not fetch group info.');
 
-        const botMember = meta.participants.find(p => p.id.replace(/:\d+@/, '@') === botId);
-        if (!botMember?.admin) return m.reply('❌ I need to be an admin to promote members.');
+        if (!m.isBotAdmin) return m.reply('❌ I need to be an admin to promote members.');
 
         let target = null;
         if (m.quoted) target = m.quoted.sender || m.quoted.key?.participant;
