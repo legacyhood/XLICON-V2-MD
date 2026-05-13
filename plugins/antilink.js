@@ -6,11 +6,8 @@ let _db = null;
 async function getDb() {
     if (_db) return _db;
     if (!process.env.MONGO_URI) return null;
-    try {
-        const { MongoClient } = require('mongodb');
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 3000 });
-        await c.connect(); _db = c.db('xlicon_bot'); return _db;
-    } catch(e) { return null; }
+    try { const { MongoClient } = require('mongodb'); const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 3000 }); await c.connect(); _db = c.db('xlicon_bot'); return _db; }
+    catch(e) { return null; }
 }
 async function isEnabled(groupId) {
     const c = settingsCache.get(groupId);
@@ -46,6 +43,7 @@ module.exports = {
     description: 'Delete links from non-admins and warn them. Default: OFF.',
     async execute(sock, m, args) {
         if (!m.isGroup) return m.reply('❌ Group only command.');
+        if (!m.isAdmin) return m.reply('❌ Only group admins can use this command.');
         const sub = (args[0]||'').toLowerCase();
         if (sub === 'on' || sub === 'enable') { await setEnabled(m.from, true); return m.reply(`🔗 *Anti-Link ENABLED!*\nLinks from non-admins will be deleted.\nWarn limit: ${WARN_LIMIT}\n\n_.antilink off_ to disable.`); }
         if (sub === 'off' || sub === 'disable') { await setEnabled(m.from, false); return m.reply('✅ Anti-Link *disabled*.'); }
@@ -67,7 +65,7 @@ module.exports = {
         if (count >= WARN_LIMIT) {
             await sock.groupParticipantsUpdate(m.from, [sc], 'remove').catch(() => {});
             await sock.sendMessage(m.from, { text:`⛔ @${sc.split('@')[0]} was *kicked* for repeatedly posting links! (${WARN_LIMIT}/${WARN_LIMIT})`, mentions:[sc] });
-            await db.collection('warnings').deleteOne({ groupId: m.from, userId: sc }).catch(() => {});
+            const db = await getDb(); if (db) await db.collection('warnings').deleteOne({ groupId: m.from, userId: sc });
         } else {
             await sock.sendMessage(m.from, { text:`🚫 *LINK REMOVED*\n👤 @${sc.split('@')[0]}\n📌 Links are not allowed for non-admins.\n⚠️ Warns: *${count}/${WARN_LIMIT}*`, mentions:[sc] });
         }
