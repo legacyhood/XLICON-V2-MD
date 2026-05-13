@@ -44,6 +44,15 @@ async function serializeMessage(sock, msg) {
 
     const groupMetadata = isGroup ? await sock.groupMetadata(from).catch(() => null) : null;
 
+    // Compute admin status
+    const senderNormalized = sender ? sender.replace(/:\d+@/, '@') : '';
+    const botNormalized = sock.user.id.replace(/:\d+@/, '@');
+    const adminList = groupMetadata
+        ? groupMetadata.participants.filter(p => p.admin).map(p => p.id.replace(/:\d+@/, '@'))
+        : [];
+    const isAdmin = isGroup && adminList.includes(senderNormalized);
+    const isBotAdmin = isGroup && adminList.includes(botNormalized);
+
     let quoted;
     const ctxInfo = msg.message?.extendedTextMessage?.contextInfo;
     if (ctxInfo?.quotedMessage) {
@@ -71,6 +80,8 @@ async function serializeMessage(sock, msg) {
         pushName,
         isGroup,
         groupMetadata,
+        isAdmin,
+        isBotAdmin,
         body,
         text: body,
         type,
