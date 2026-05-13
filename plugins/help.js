@@ -61,7 +61,11 @@ module.exports = {
                 usage: `${prefix}setowner\n${prefix}setowner add 2348012345678\n${prefix}setowner remove 2348012345678\n${prefix}setowner set 2348012345678`,
                 aliases: 'owner, addowner, removeowner'
             },
-            broadcast:  { desc: 'Send a message to ALL groups the bot is in (owner only)', usage: `${prefix}broadcast Your announcement here`, aliases: 'bc, announce' },
+            broadcast:  {
+                desc: `Send a message or media to ALL groups the bot is in (owner only).\n\n• <message> — broadcast plain text\n• (reply to message/image/video) — broadcast that content\n• list — see all groups the bot is in`,
+                usage: `\${prefix}broadcast Your message here\n\${prefix}broadcast (reply to image/video/text)\n\${prefix}broadcast list`,
+                aliases: 'bc, announce'
+            },
             exec:       { desc: '(Owner) Execute JavaScript code on the server', usage: `${prefix}exec console.log("test")`, aliases: '>' },
         };
 
