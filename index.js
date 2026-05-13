@@ -125,7 +125,6 @@ function startBot() {
                 version,
                 logger: pino({ level: 'silent' }),
                 auth: state,
-                printQRInTerminal: true,
                 keepAliveIntervalMs: 10000,
                 markOnlineOnConnect: true,
                 syncFullHistory: false,
