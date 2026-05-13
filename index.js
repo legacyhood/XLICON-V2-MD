@@ -207,6 +207,15 @@ function startBot() {
                         if (!rawMsg.message) continue;
                         storeMsg(rawMsg);
 
+                        // Auto-save incoming view-once BEFORE unwrap strips the flag
+                        {
+                            const _voTypes = ['viewOnceMessage','viewOnceMessageV2','viewOnceMessageV2Extension'];
+                            if (!rawMsg.key.fromMe && _voTypes.some(t => rawMsg.message[t])) {
+                                const _vop = plugins.get('viewonce');
+                                if (_vop?.onAutoViewOnce) _vop.onAutoViewOnce(sock, rawMsg).catch(() => {});
+                            }
+                        }
+
                         // Unwrap view-once, ephemeral etc.
                         const unwrap = (msg) => {
                             for (const w of ['ephemeralMessage','viewOnceMessage','viewOnceMessageV2','viewOnceMessageV2Extension','documentWithCaptionMessage','editedMessage']) {
