@@ -4,8 +4,8 @@ module.exports = {
     description: 'Add a member to the group by phone number',
     async execute(sock, m, args) {
         if (!m.isGroup) return m.reply('❌ This command only works in groups.');
-        if (!m.isAdmin) return m.reply('❌ Only group admins can use this command.');
-        if (!m.isBotAdmin) return m.reply('❌ I need to be an admin to add members.');
+        if (!m.isAdmin) return m.reply('❌ You need to be a group admin to use this command.');
+        if (!m.isBotAdmin) return m.reply('❌ The bot is not a group admin. Please promote the bot first, then try again.');
         const num = (args[0] || '').replace(/[^0-9]/g, '');
         if (!num || num.length < 7) return m.reply('❌ Please provide a valid phone number.\n\nUsage: _.add 233XXXXXXXXX_');
         const jid = num + '@s.whatsapp.net';
