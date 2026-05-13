@@ -14,8 +14,8 @@ module.exports = {
     description: 'Set welcome/goodbye messages for the group',
     async execute(sock, m, args) {
         if (!m.isGroup) return m.reply('❌ Group only command.');
-        if (!m.isAdmin) return m.reply('❌ Only group admins can use this command.');
-        if (!m.isBotAdmin) return m.reply('❌ I need to be an admin.');
+        if (!m.isAdmin) return m.reply('❌ You need to be a group admin to use this command.');
+        if (!m.isBotAdmin) return m.reply('❌ The bot is not a group admin. Please promote the bot first, then try again.');
         const meta = await sock.groupMetadata(m.from).catch(() => null);
         const sub = args[0]?.toLowerCase();
         const text = args.slice(1).join(' ').trim();
