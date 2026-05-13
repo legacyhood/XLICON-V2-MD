@@ -233,10 +233,6 @@ function startBot() {
                             if (plugin) {
                                 try {
                                     await plugin.execute(sock, m, args);
-                                    // Silently try to delete the command message (don't crash if it fails)
-                                    setTimeout(() => {
-                                        sock.sendMessage(m.from, { delete: m.key }).catch(() => {});
-                                    }, 500);
                                 } catch (err) {
                                     console.error(`[CMD:${cmdName}]`, err.message);
                                     try { await m.reply(`⚠️ Error in command *${cmdName}*: ${err.message.slice(0,100)}`); } catch (_) {}
