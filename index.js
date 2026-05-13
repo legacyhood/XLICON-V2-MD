@@ -100,10 +100,10 @@ function loadPrefix() {
         const cp = path.join(__dirname, 'config.json');
         if (fs.existsSync(cp)) {
             const cfg = JSON.parse(fs.readFileSync(cp, 'utf8'));
-            if (cfg.prefix) { global.BOT_PREFIX = cfg.prefix; console.log('Prefix:', global.BOT_PREFIX); }
+            if (cfg.prefix) { global.BOT_PREFIX = cfg.prefix; }
             if (Array.isArray(cfg.owners) && cfg.owners.length) {
                 global.owners = cfg.owners;
-                console.log('[Config] Loaded owners from config.json:', cfg.owners.map(o => o.split('@')[0]));
+                
             }
         }
     } catch (_) {}
@@ -117,7 +117,7 @@ function startBot() {
     (async () => {
         try {
             const { version } = await fetchLatestWaWebVersion().catch(() => ({ version: [2, 3000, 1015901307] }));
-            console.log('[Bot] WA version:', version.join('.'));
+            
 
             const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
 
@@ -255,7 +255,7 @@ function startBot() {
                             continue;
                         }
 
-                        console.log(`[MSG] from=${m.sender} body="${(m.body||'').slice(0,60)}"`);
+                        
 
                         // ── Command routing ───────────────────────────────────
                         if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
