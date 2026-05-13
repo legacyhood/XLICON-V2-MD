@@ -296,8 +296,14 @@ function startBot() {
                 }
             });
 
-            sock.ev.on('group-participants.update', (update) => {
+            sock.ev.on('group-participants.update', async (update) => {
                 console.log('Group update:', JSON.stringify(update));
+                const welcomePlugin = plugins.get('welcome');
+                if (welcomePlugin && typeof welcomePlugin.onGroupUpdate === 'function') {
+                    await welcomePlugin.onGroupUpdate(sock, update).catch(err =>
+                        console.error('[welcome] onGroupUpdate error:', err.message)
+                    );
+                }
             });
 
         } catch (error) {
