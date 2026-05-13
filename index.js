@@ -10,7 +10,7 @@ const serializeMessage = require('./handler.js');
 
 global.generateWAMessageFromContent = generateWAMessageFromContent;
 global.proto = proto;
-require('./config')
+require('./config');
 
 // Restore session: check SESSION_ID env var first, then MongoDB
 (async () => {
