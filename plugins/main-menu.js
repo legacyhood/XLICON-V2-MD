@@ -17,7 +17,7 @@ module.exports = {
 ┃   _Your Smart Assistant_  ┃
 ╰━━━━━━━━━━━━━━━━━━━━━━╯
 
-👋 Hey *${name}*! 
+👋 Hey *${name}*!
 📍 *Mode:* ${mode}
 ⏰ *Time:* ${now}
 🕐 *Uptime:* ${uptimeStr}
@@ -27,6 +27,7 @@ module.exports = {
 ┃ ${p}alive • ${p}ping — Bot status & speed
 ┃ ${p}uptime — Running time
 ┃ ${p}menu — This menu
+┃ ${p}help <cmd> — Detailed command info
 ╰──────────────────────────
 
 ╭─── 👤 *USER TOOLS* ──────
@@ -38,9 +39,13 @@ module.exports = {
 
 ╭─── 👻 *PRIVACY & STEALTH* ─
 ┃ ${p}anonread — Ghost mode (no blue ticks)
-┃ ${p}anonview — View statuses anonymously
-┃ ${p}viewonce — Reveal view-once (sent to DM)
+┃ ${p}anonview — Silently cache statuses
+┃ ${p}statusdl list — See cached statuses
+┃ ${p}statusdl <number> — Get a contact's statuses
+┃ ${p}statusdl clear — Clear all cached statuses
 ┃ ${p}antidelete — Catch deleted messages
+┃ _View-once auto-saved to your DM instantly_
+┃ _No command needed — fully automatic_
 ╰──────────────────────────
 
 ╭─── 🎨 *MEDIA & STICKERS* ─
@@ -85,13 +90,12 @@ module.exports = {
 ╭─── 👥 *GROUP ADMIN* ─────
 ┃ ${p}tagall [msg] — Mention everyone
 ┃ ${p}kick @user — Remove member
-┃ ${p}add 233XX — Add by number
+┃ ${p}add 2348XX — Add by number
 ┃ ${p}promote @user — Make admin
 ┃ ${p}demote @user — Remove admin
 ┃ ${p}mute / ${p}unmute — Lock/unlock
 ┃ ${p}grouplink [revoke] — Invite link
-┃ ${p}rules — Show group rules
-┃ ${p}rules set ... — Set rules
+┃ ${p}rules — Show/set group rules
 ╰──────────────────────────
 
 ╭─── 🛡️ *GROUP PROTECTION* ─
@@ -118,11 +122,15 @@ module.exports = {
 ╰──────────────────────────
 
 ╭─── ⚙️ *OWNER ONLY* ───────
-┃ ${p}broadcast <msg> — All groups
+┃ ${p}setowner — Show current owners
+┃ ${p}setowner add <number> — Add owner
+┃ ${p}setowner remove <number> — Remove owner
+┃ ${p}setowner set <number> — Replace all owners
+┃ ${p}broadcast <msg> — Send to all groups
 ┃ ${p}anonread — Ghost mode toggle
 ╰──────────────────────────
 
-> 🔤 Prefix: *${p}* | Commands are hidden after use
+> 🔤 Prefix: *${p}* | Use *${p}help <cmd>* for details
 > 📰 News: world tech sport biz health africa
 > ⚽ Sports: soccer nba nfl cricket`
         );
