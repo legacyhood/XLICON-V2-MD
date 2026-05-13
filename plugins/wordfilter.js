@@ -1,15 +1,13 @@
 const { MongoClient } = require('mongodb');
 const WARN_LIMIT = parseInt(process.env.WARN_LIMIT || '3', 10);
-const filterCache = new Map(); // groupId → { words: [], cachedAt }
+const filterCache = new Map();
 const CACHE_TTL = 60000;
 let _db = null;
 async function getDb() {
     if (_db) return _db;
     if (!process.env.MONGO_URI) return null;
-    try {
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 3000 });
-        await c.connect(); _db = c.db('xlicon_bot'); return _db;
-    } catch(e) { return null; }
+    try { const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 3000 }); await c.connect(); _db = c.db('xlicon_bot'); return _db; }
+    catch(e) { return null; }
 }
 async function getFilteredWords(groupId) {
     const c = filterCache.get(groupId);
@@ -41,6 +39,7 @@ module.exports = {
     description: 'Block specific words in the group',
     async execute(sock, m, args) {
         if (!m.isGroup) return m.reply('❌ Group only command.');
+        if (!m.isAdmin) return m.reply('❌ Only group admins can use this command.');
         const db = await getDb();
         const sub = args[0]?.toLowerCase();
         const word = args.slice(1).join(' ').toLowerCase().trim();
