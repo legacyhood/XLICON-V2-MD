@@ -127,6 +127,8 @@ module.exports = {
 ┃ ${p}setowner remove <number> — Remove owner
 ┃ ${p}setowner set <number> — Replace all owners
 ┃ ${p}broadcast <msg> — Send to all groups
+┃ ${p}broadcast (reply) — Broadcast quoted msg
+┃ ${p}broadcast list — Show all groups
 ┃ ${p}anonread — Ghost mode toggle
 ╰──────────────────────────
 
