@@ -80,6 +80,10 @@ function loadPrefix() {
         if (fs.existsSync(cp)) {
             const cfg = JSON.parse(fs.readFileSync(cp, 'utf8'));
             if (cfg.prefix) { global.BOT_PREFIX = cfg.prefix; console.log('Prefix:', global.BOT_PREFIX); }
+            if (Array.isArray(cfg.owners) && cfg.owners.length) {
+                global.owners = cfg.owners;
+                console.log('[Config] Loaded owners from config.json:', cfg.owners.map(o => o.split('@')[0]));
+            }
         }
     } catch (_) {}
     startBot();
