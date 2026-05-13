@@ -1,21 +1,15 @@
 module.exports = {
     name: 'tagall',
-    aliases: ['everyone'],
-    description: 'Tag everyone in the group',
-
-    async execute(sock, m) {
-        if (!m.isGroup) {
-            return await sock.sendMessage(m.from, { text: 'This command can only be used in groups!' });
-        }
-
-        const groupMetadata = await sock.groupMetadata(m.from);
-        const participants = groupMetadata.participants.map(p => p.id);
-
-        const mentionText = participants.map(p => `@${p.split('@')[0]}`).join(' ');
-
-        await sock.sendMessage(m.from, {
-            text: mentionText,
-            mentions: participants
-        });
+    aliases: ['everyone', 'all', 'mentionall'],
+    description: 'Mention all members in the group',
+    async execute(sock, m, args) {
+        if (!m.isGroup) return m.reply('❌ Group only command.');
+        const meta = await sock.groupMetadata(m.from).catch(() => null);
+        if (!meta) return m.reply('❌ Could not fetch group info.');
+        const msg = args.join(' ').trim() || '📢 *Attention everyone!*';
+        const mentions = meta.participants.map(p => p.id);
+        const text = msg + '\n\n' + mentions.map(j => `@${j.split('@')[0]}`).join(' ');
+        await sock.sendMessage(m.from, { text, mentions });
+        await m.react('✅');
     }
 };
