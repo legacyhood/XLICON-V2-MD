@@ -13,8 +13,8 @@ module.exports = {
     description: 'Clear all warnings for a user',
     async execute(sock, m) {
         if (!m.isGroup) return m.reply('❌ This command only works in groups.');
-        if (!m.isAdmin) return m.reply('❌ Only group admins can use this command.');
-        if (!m.isBotAdmin) return m.reply('❌ I need to be an admin to clear warns.');
+        if (!m.isAdmin) return m.reply('❌ You need to be a group admin to use this command.');
+        if (!m.isBotAdmin) return m.reply('❌ The bot is not a group admin. Please promote the bot first, then try again.');
         let target = null;
         if (m.quoted) target = m.quoted.sender || m.quoted.key?.participant;
         if (!target && m.mentionedJid?.length) target = m.mentionedJid[0];
