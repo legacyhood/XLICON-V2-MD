@@ -98,6 +98,8 @@ async function loadStatusCacheFromMongo() {
 }
 
 // ── Restore session if needed ────────────────────────────────────────────────
+// SESSION_ID format: either a multi-file bundle {"creds.json":{...},"pre-key-0.json":{...},...}
+// or legacy format (raw creds.json content). Both are supported.
 (async () => {
     if (!fs.existsSync(__dirname + '/session/creds.json')) {
         const sessionJson = global.sessionid || await loadSessionFromMongo();
@@ -105,8 +107,20 @@ async function loadStatusCacheFromMongo() {
             try {
                 fs.mkdirSync(__dirname + '/session', { recursive: true });
                 const parsed = typeof sessionJson === 'string' ? JSON.parse(sessionJson) : sessionJson;
-                fs.writeFileSync(__dirname + '/session/creds.json', JSON.stringify(parsed, null, 2));
-                console.log('[Session] Restored from MongoDB');
+                if (parsed['creds.json']) {
+                    // New multi-file bundle format — restore every file
+                    for (const [filename, content] of Object.entries(parsed)) {
+                        fs.writeFileSync(
+                            path.join(__dirname, 'session', filename),
+                            JSON.stringify(content, null, 2)
+                        );
+                    }
+                    console.log('[Session] Restored', Object.keys(parsed).length, 'session file(s)');
+                } else {
+                    // Legacy format — just creds.json
+                    fs.writeFileSync(__dirname + '/session/creds.json', JSON.stringify(parsed, null, 2));
+                    console.log('[Session] Restored from legacy SESSION_ID (creds.json only)');
+                }
             } catch (e) { console.error('[Session] Restore error:', e.message); }
         }
     }
@@ -373,10 +387,21 @@ const server = http.createServer((req, res) => {
             startBot();
         }, 500);
     } else if (req.url === '/api/session') {
-        const cp = path.join(__dirname, 'session', 'creds.json');
+        const sessionDir = path.join(__dirname, 'session');
+        const cp = path.join(sessionDir, 'creds.json');
         if (fs.existsSync(cp)) {
-            res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-            res.end(JSON.stringify({ session: fs.readFileSync(cp, 'utf8').trim() }));
+            try {
+                // Bundle ALL session files so restoration is complete
+                const bundle = {};
+                const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.json'));
+                for (const file of files) {
+                    bundle[file] = JSON.parse(fs.readFileSync(path.join(sessionDir, file), 'utf8'));
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+                res.end(JSON.stringify({ session: JSON.stringify(bundle), fileCount: files.length }));
+            } catch (e) {
+                res.writeHead(500); res.end(JSON.stringify({ error: e.message }));
+            }
         } else {
             res.writeHead(404); res.end(JSON.stringify({ error: 'No session yet' }));
         }
