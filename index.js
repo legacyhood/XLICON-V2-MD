@@ -1,4 +1,4 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, generateWAMessageFromContent, fetchLatestWaWebVersion, proto } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, generateWAMessageFromContent, fetchLatestWaWebVersion, fetchLatestBaileysVersion, proto } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
@@ -150,7 +150,7 @@ function startBot() {
 
     (async () => {
         try {
-            const { version } = await fetchLatestWaWebVersion().catch(() => ({ version: [2, 3000, 1015901307] }));
+            const { version } = await fetchLatestWaWebVersion().catch(() => fetchLatestBaileysVersion());
             
 
             const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
