@@ -1,55 +1,84 @@
 /**
- * Anti-Delete Plugin
- * Saves all messages to MongoDB and forwards deleted ones to the owner.
+ * Anti-Delete Plugin — persists enabled state to MongoDB across restarts.
  */
-const { MongoClient } = require('mongodb');
 
 let _db = null;
 async function getDb() {
     if (_db) return _db;
     if (!process.env.MONGO_URI) return null;
     try {
-        const client = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-        await client.connect();
-        _db = client.db('xlicon_bot');
+        const { MongoClient } = require('mongodb');
+        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
+        await c.connect();
+        _db = c.db('xlicon_bot');
         return _db;
-    } catch (e) {
-        console.error('[AntiDelete] DB connect error:', e.message);
-        return null;
+    } catch (e) { return null; }
+}
+
+let _loaded = false;
+let _enabled = false;
+
+async function loadState() {
+    if (_loaded) return _enabled;
+    const db = await getDb();
+    if (db) {
+        const doc = await db.collection('bot_settings').findOne({ _id: 'antidelete' });
+        _enabled = doc?.value === true;
+    }
+    _loaded = true;
+    return _enabled;
+}
+
+async function saveState(val) {
+    _enabled = val;
+    const db = await getDb();
+    if (db) {
+        await db.collection('bot_settings').updateOne(
+            { _id: 'antidelete' },
+            { $set: { value: val, updatedAt: new Date() } },
+            { upsert: true }
+        );
     }
 }
 
-const OWNER = '233533763772@s.whatsapp.net';
+// Auto-load on startup
+loadState().catch(() => {});
+
+function isOwner(m) {
+    const owners = global.owners || [];
+    return owners.some(o => (m.sender || '').includes(o.split('@')[0]));
+}
 
 module.exports = {
     name: 'antidelete',
     aliases: ['ad', 'nodelete'],
     description: 'Toggle anti-delete — saves and reveals deleted messages',
-    enabled: false,
 
     async execute(sock, m) {
-        const owners = (global.owners || [OWNER]);
-        const isOwner = owners.some(o => m.sender.includes(o.split('@')[0]));
-        if (!isOwner) return m.reply('❌ This command is for the owner only.');
+        if (!isOwner(m)) return m.reply('❌ This command is for the owner only.');
 
-        this.enabled = !this.enabled;
-        const status = this.enabled ? '✅ *ON*' : '❌ *OFF*';
+        const current = await loadState();
+        await saveState(!current);
+        const on = !current;
+        const status = on ? '✅ *ON*' : '❌ *OFF*';
+
         await m.reply(
 `╭━━━━━━━━━━━━━━━━━━━╮
 ┃   🗑️ *ANTI-DELETE*   ┃
 ╰━━━━━━━━━━━━━━━━━━━╯
 
 Status: ${status}
+💾 Saved — survives restarts
 
-${this.enabled
+${on
     ? '• Deleted messages will be saved and forwarded to you\n• Works in both DMs and groups'
     : '• Anti-delete is now disabled'}`
         );
     },
 
-    // Save every message to MongoDB for recovery
     async onMessage(sock, m) {
-        if (!this.enabled) return;
+        const on = await loadState();
+        if (!on) return;
         if (!m.id || !m.message) return;
         if (m.from === 'status@broadcast') return;
 
@@ -73,16 +102,17 @@ ${this.enabled
                 },
                 { upsert: true }
             );
-        } catch (e) {
-            console.error('[AntiDelete] Save error:', e.message);
-        }
+        } catch (e) {}
     },
 
-    // Called from index.js when messages.delete fires
     async onDelete(sock, deletedKeys) {
-        if (!this.enabled) return;
+        const on = await loadState();
+        if (!on) return;
         const db = await getDb();
         if (!db) return;
+
+        const owners = global.owners || [];
+        const ownerJid = owners[0] || '';
 
         for (const key of deletedKeys) {
             if (!key.id) continue;
@@ -105,10 +135,8 @@ ${this.enabled
                     text += `\n📎 *Type:* ${saved.type}`;
                 }
 
-                await sock.sendMessage(OWNER, { text });
-            } catch (e) {
-                console.error('[AntiDelete] Forward error:', e.message);
-            }
+                if (ownerJid) await sock.sendMessage(ownerJid, { text });
+            } catch (e) {}
         }
     }
 };
