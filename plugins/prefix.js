@@ -1,9 +1,9 @@
 let _db=null;
-async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const{MongoClient}=require('mongodb');const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
+async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
 module.exports={name:'prefix',aliases:['setprefix','changeprefix','botprefix'],description:'Change the bot command prefix without touching Railway — owner only',
 async execute(sock,m,args){
     const owners=global.owners||[];
-    const isOwner=owners.some(o=>o.split('@')[0]===(m.sender||'').split('@')[0]);
+    const isOwner = m.isOwner;[0]===(m.sender||'').split('@')[0]);
     if(!isOwner) return m.reply('❌ Owner only command.');
     const newPrefix=args[0];
     if(!newPrefix) {
