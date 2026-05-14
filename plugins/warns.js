@@ -1,5 +1,3 @@
-const { MongoClient } = require('mongodb');
-
 let mongoClient = null;
 let db = null;
 
