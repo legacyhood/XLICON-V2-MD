@@ -9,6 +9,21 @@ const { Boom } = require('@hapi/boom');
 const zlib = require('zlib');
 const serializeMessage = require('./handler.js');
 
+// ── MongoClient singleton patch ───────────────────────────────────────────────
+// Ensures all plugin getDb() helpers automatically use the shared connection.
+// Runs before plugins load; calls global.getMongoDb() lazily at connect-time.
+try {
+    const _MC = require('mongodb').MongoClient;
+    class _PatchedMC extends _MC {
+        async connect() { this._gdb = await global.getMongoDb(); return this; }
+        db() { return this._gdb || super.db(...arguments); }
+    }
+    require('mongodb').MongoClient = _PatchedMC;
+    require.cache[require.resolve('mongodb')].exports.MongoClient = _PatchedMC;
+} catch(_) {}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 global.generateWAMessageFromContent = generateWAMessageFromContent;
 global.proto = proto;
 require('./config');
