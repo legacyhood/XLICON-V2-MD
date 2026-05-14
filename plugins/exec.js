@@ -16,10 +16,9 @@ module.exports = {
         if (sentOnce.has(m.id)) return;
         sentOnce.add(m.id);
 
-        // Check owner using global.owners (normalise to strip :device suffix)
         const owners = global.owners || [];
-        const senderNum = (m.sender || '').split('@')[0].replace(/:d+$/, '');
-        const isOwner = owners.some(o => o.split('@')[0].replace(/:d+$/, '') === senderNum);
+        const senderNum = (m.sender || '').split('@')[0].replace(/:\d+$/, '');
+        const isOwner = owners.some(o => o.split('@')[0].replace(/:\d+$/, '') === senderNum);
         if (!isOwner) return;
 
         const code = m.text.slice(1).trim();
@@ -28,8 +27,7 @@ module.exports = {
             const sandbox = { sock, m, axios, util, console };
             const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
             let result;
-            if (code.includes('await') || code.includes('
-')) {
+            if (code.includes('await') || code.includes('\n')) {
                 result = await new AsyncFunction(...Object.keys(sandbox), code)(...Object.values(sandbox));
             } else {
                 result = await new Function(...Object.keys(sandbox), 'return ' + code)(...Object.values(sandbox));
@@ -37,9 +35,9 @@ module.exports = {
             const output = result === undefined ? 'undefined'
                 : typeof result === 'string' ? result
                 : util.inspect(result, { depth: 2 });
-            await m.send(`☑️ *Exec Result:*\n\`\`\`\n${output.slice(0,4000)}\n\`\`\``);
+            await m.send('\u2611\ufe0f *Exec Result:*\n```\n' + output.slice(0, 4000) + '\n```');
         } catch (err) {
-            await m.send(`❌ Error:\n\`\`\`\n${err.message}\n\`\`\``);
+            await m.send('\u274c Error:\n```\n' + err.message + '\n```');
         }
 
         setTimeout(() => sentOnce.delete(m.id), 5000);
