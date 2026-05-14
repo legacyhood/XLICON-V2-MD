@@ -80,7 +80,12 @@ async function getMongoDb() {
         _mongoClient = c;
         _mongoConnecting = null;
         console.log('[MongoDB] Connected (singleton)');
-        return c.db('xlicon_bot');
+        const xlDb = c.db('xlicon_bot');
+        // TTL: auto-delete antidelete messages after 10 minutes
+        xlDb.collection('messages').createIndex({ timestamp: 1 }, { expireAfterSeconds: 600, background: true }).catch(() => {});
+        // TTL: auto-delete status_cache entries after 7 days
+        xlDb.collection('status_cache').createIndex({ updatedAt: 1 }, { expireAfterSeconds: 604800, background: true }).catch(() => {});
+        return xlDb;
     })();
     const db = await _mongoConnecting;
     return db;
@@ -97,9 +102,10 @@ async function saveSessionToMongo(bundle) {
     try {
         const db = await getMongoDb();
         if (!db) return;
+        const compressed = zlib.gzipSync(Buffer.from(bundle, 'utf8'));
         await db.collection('sessions').replaceOne(
             { _id: 'main_session' },
-            { _id: 'main_session', session: bundle, updatedAt: new Date() },
+            { _id: 'main_session', session: compressed, gz: true, updatedAt: new Date() },
             { upsert: true }
         );
     } catch (e) { console.error('[MongoDB] Session save failed:', e.message); _mongoClient = null; }
@@ -110,7 +116,12 @@ async function loadSessionFromMongo() {
         const db = await getMongoDb();
         if (!db) return null;
         const doc = await db.collection('sessions').findOne({ _id: 'main_session' });
-        return doc?.session || null;
+        if (!doc?.session) return null;
+        if (doc.gz) {
+            const buf = doc.session.buffer ? Buffer.from(doc.session.buffer) : Buffer.from(doc.session);
+            return zlib.gunzipSync(buf).toString('utf8');
+        }
+        return doc.session;
     } catch (e) { console.error('[MongoDB] Session load failed:', e.message); _mongoClient = null; return null; }
 }
 
