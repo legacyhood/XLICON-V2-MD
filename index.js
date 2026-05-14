@@ -339,6 +339,9 @@ function startBot() {
                             }
                         }
                     } catch (_) {}
+                    // Upload fresh prekeys immediately so contacts can decrypt our replies
+                    // without waiting for the next key exchange cycle (fixes "Waiting for message")
+                    try { await sock.uploadPreKeys(); } catch (_) {}
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
                     }, 30000);
@@ -431,7 +434,7 @@ function startBot() {
                             console.error('[serialize]', err.message);
                             continue;
                         }
-                        if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
+                        if (m.body && m.body.startsWith(global.BOT_PREFIX) && type === 'notify') {
                             const parts = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
                             const cmdName = parts.shift().toLowerCase();
                             const args = parts;
