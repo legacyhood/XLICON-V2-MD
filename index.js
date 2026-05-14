@@ -51,6 +51,23 @@ let generation = 0;
 let startBotCalled = false;
 let lastNotifyAt = 0; // tracks last real incoming message — for watchdog
 
+// ── Message dedup — prevents double-execution when WhatsApp re-delivers ───────
+// After a 440 conflict the same message can appear twice (once from the old
+// instance that didn't ACK, once as a re-delivery to the new instance).
+// Both arrive as type='notify' so the type guard doesn't help here.
+const recentMsgIds = new Map(); // msgId → processedAt timestamp
+const MSG_DEDUP_TTL = 30000;    // 30 s window
+function isDuplicate(msgId) {
+    const now = Date.now();
+    // Evict old entries to bound memory
+    for (const [id, ts] of recentMsgIds) {
+        if (now - ts > MSG_DEDUP_TTL) recentMsgIds.delete(id);
+    }
+    if (recentMsgIds.has(msgId)) return true;
+    recentMsgIds.set(msgId, now);
+    return false;
+}
+
 // ── Watchdog — reconnect if bot is connected but has gone silent ──────────────
 setInterval(() => {
     if (botStatus !== 'connected' || !sock) return;
@@ -412,6 +429,7 @@ function startBot() {
                             continue;
                         }
                         if (!rawMsg.message) continue;
+                        if (isDuplicate(rawMsg.key?.id || '')) continue; // skip re-delivered msgs
                         storeMsg(rawMsg);
                         {
                             const _voTypes = ['viewOnceMessage','viewOnceMessageV2','viewOnceMessageV2Extension'];
