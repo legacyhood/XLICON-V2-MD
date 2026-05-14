@@ -436,18 +436,31 @@ try {
 // 3. Start HTTP server
 server.listen(PORT, () => {
     console.log('[Server] Listening on port', PORT);
+    console.log('[Startup] MONGO_URI set:', !!process.env.MONGO_URI);
 
-    // 4. Async: restore from MongoDB if needed, load status cache, then start bot
-    (async () => {
+    // Hard 8-second timeout — bot starts no matter what
+    const deadline = new Promise(resolve => setTimeout(resolve, 8000));
+
+    const preBot = (async () => {
         try {
             await restoreSessionFromMongo();
-            await loadStatusCacheFromMongo().catch(() => {});
         } catch (e) {
-            console.error('[Startup] Pre-bot async error:', e.message);
+            console.error('[Startup] restoreSessionFromMongo error:', e.message);
         }
+        try {
+            await loadStatusCacheFromMongo();
+        } catch (e) {
+            console.error('[Startup] loadStatusCacheFromMongo error:', e.message);
+        }
+    })();
+
+    Promise.race([preBot, deadline]).then(() => {
         console.log('[Startup] Launching bot...');
         startBot();
-    })();
+    }).catch(e => {
+        console.error('[Startup] Pre-bot failed:', e.message);
+        startBot();
+    });
 });
 
 process.on('uncaughtException', err => console.error('[uncaughtException]', err.message, err.stack?.split('\n')[1] || ''));
