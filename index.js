@@ -38,6 +38,7 @@ let botStatus = 'disconnected';
 let presenceInterval = null;
 let sock = null;
 let reconnectAttempts = 0;
+let generation = 0; // prevents stale socket events from triggering reconnects
 
 // ── In-memory message store (fixes "Waiting for this message") ──────────────
 const msgStore = new Map();
@@ -142,6 +143,9 @@ async function clearSession() {
 
 function startBot() {
     console.log('[Bot] Starting...');
+    // Close old socket before creating new one to prevent duplicate event firing
+    if (sock) { try { sock.ws?.terminate(); } catch(_) {} sock = null; }
+    const myGen = ++generation;
     if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
 
     (async () => {
@@ -167,6 +171,8 @@ function startBot() {
 
             // ── Connection ───────────────────────────────────────────────────
             sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+                // Ignore events from a previous (stale) socket instance
+                if (generation !== myGen) return;
                 if (qr) QRCode.toDataURL(qr, (err, url) => { if (!err) latestQR = url; });
                 if (connection === 'close') {
                     botStatus = 'disconnected';
@@ -317,6 +323,9 @@ function startBot() {
                             // Don't run onMessage hooks for commands
                             continue;
                         }
+
+                        // Skip onMessage hooks for the bot's own messages (startup msg, etc.)
+                        if (rawMsg.key?.fromMe) continue;
 
                         // ── onMessage hooks (non-command messages) ────────────
                         for (const plugin of new Set(plugins.values())) {
