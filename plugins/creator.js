@@ -9,17 +9,17 @@ module.exports = {
             if (!owners.length) return m.reply('❌ No owner configured. Set BOT_OWNER_JID in environment.');
 
             const contacts = owners.map(jid => {
-                const num = jid.split('@')[0].replace(/:d+$/, '');
-                return {
-                    displayName: 'XLICON Owner',
-                    vcard: 'BEGIN:VCARD
-VERSION:3.0
-N:;XLICON Owner;;;
-FN:XLICON Owner
-TEL;waid=' + num + ':' + num + '
-X-WA-BIZ-NAME:XLICON V2-MD
-END:VCARD'
-                };
+                const num = jid.split('@')[0].replace(/:\d+$/, '');
+                const vcard = [
+                    'BEGIN:VCARD',
+                    'VERSION:3.0',
+                    'N:;XLICON Owner;;;',
+                    'FN:XLICON Owner',
+                    'TEL;waid=' + num + ':' + num,
+                    'X-WA-BIZ-NAME:XLICON V2-MD',
+                    'END:VCARD'
+                ].join('\n');
+                return { displayName: 'XLICON Owner', vcard };
             });
 
             await sock.sendMessage(m.from, { contacts: { contacts } });
