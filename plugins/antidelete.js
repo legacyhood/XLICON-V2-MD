@@ -79,9 +79,14 @@ ${on
     async onMessage(sock, m) {
         const on = await loadState();
         if (!on) return;
-        if (!m.id || !m.message) return;
+        if (!m.id || !m.body === undefined) return;
         if (m.from === 'status@broadcast') return;
-        if (m.key?.fromMe) return; // don't save bot's own messages
+
+        // FIX 1: Properly skip messages sent by the bot itself.
+        // m.key does not exist on the serialized object, so we compare sender to bot JID.
+        const botBase = (sock.user?.id || '').split(':')[0].split('@')[0];
+        const senderBase = (m.sender || '').split(':')[0].split('@')[0];
+        if (senderBase === botBase) return;
 
         const db = await getDb();
         if (!db) return;
@@ -112,18 +117,30 @@ ${on
         const db = await getDb();
         if (!db) return;
 
+        // FIX 2: Ignore all delete events that arrive within 60 seconds of bot startup.
+        // WhatsApp replays pending delete events on reconnect — this prevents stale spam.
+        const startGrace = 60 * 1000;
+        if (Date.now() - (global.botStartTime || 0) < startGrace) return;
+
         const owners = global.owners || [];
         let ownerJid = owners[0] || '';
-        // Normalize: ensure JID has the correct domain suffix
         if (ownerJid && !ownerJid.includes('@')) ownerJid += '@s.whatsapp.net';
 
         for (const key of deletedKeys) {
             if (!key.id) continue;
+
+            // FIX 3: Skip delete events for messages the bot itself sent (fromMe).
+            if (key.fromMe) continue;
+
             try {
                 const saved = await db.collection('messages').findOne({ _id: key.id });
                 if (!saved) continue;
 
-                const name = saved.pushName || '+' + (saved.sender?.split('@')[0] || '?');
+                // FIX 4: Skip stale saved messages older than 10 minutes — extra safety net.
+                const ageMs = Date.now() - (saved.timestamp || 0);
+                if (ageMs > 10 * 60 * 1000) continue;
+
+                const name = saved.pushName || '+' + (saved.sender?.split('@')[0]?.split(':')[0] || '?');
                 const chatLabel = saved.isGroup
                     ? `📢 Group: ${saved.from?.split('@')[0]}`
                     : `💬 DM with: ${name}`;
