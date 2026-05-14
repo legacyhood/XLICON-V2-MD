@@ -27,25 +27,32 @@ module.exports = {
 ┃ ${p}alive • ${p}ping — Bot status & speed
 ┃ ${p}uptime — Running time
 ┃ ${p}menu — This menu
-┃ ${p}help <cmd> — Detailed command info
+┃ ${p}help <cmd> — Full command details
+╰──────────────────────────
+
+╭─── 🤖 *AI ASSISTANT* ────
+┃ ${p}ai <question> — Ask Claude AI anything
+┃ ${p}ai on — Auto-reply to all msgs here
+┃ ${p}ai off — Turn off AI auto-reply
+┃ ${p}aiclear — Reset conversation memory
+┃ _Works in personal chat & groups_
 ╰──────────────────────────
 
 ╭─── 👤 *USER TOOLS* ──────
 ┃ ${p}profile @user — Download profile pic
 ┃ ${p}info @user — Full user info
-┃ ${p}info group — Group stats
-┃ ${p}groupstats — Detailed group info
+┃ ${p}info group — Group info & stats
+┃ ${p}groupstats — Detailed group report
 ╰──────────────────────────
 
 ╭─── 👻 *PRIVACY & STEALTH* ─
 ┃ ${p}anonread — Ghost mode (no blue ticks)
 ┃ ${p}anonview — Silently cache statuses
 ┃ ${p}statusdl list — See cached statuses
-┃ ${p}statusdl <number> — Get a contact's statuses
-┃ ${p}statusdl clear — Clear all cached statuses
+┃ ${p}statusdl <number> — Get their statuses
+┃ ${p}statusdl clear — Clear all cached
 ┃ ${p}antidelete — Catch deleted messages
 ┃ _View-once auto-saved to your DM instantly_
-┃ _No command needed — fully automatic_
 ╰──────────────────────────
 
 ╭─── 🎨 *MEDIA & STICKERS* ─
@@ -62,7 +69,7 @@ module.exports = {
 ┃ ${p}sports [sport] — Live scores
 ┃ ${p}wiki <topic> — Wikipedia summary
 ┃ ${p}dict <word> — Word definition
-┃ ${p}currency 100 USD GHS — Forex
+┃ ${p}currency 100 USD GHS — Forex rates
 ╰──────────────────────────
 
 ╭─── 🎲 *FUN & GAMES* ─────
@@ -71,18 +78,15 @@ module.exports = {
 ┃ ${p}dice [n] — Roll dice
 ┃ ${p}rps rock|paper|scissors
 ┃ ${p}choose A, B, C — Pick random
-┃ ${p}truth — Truth question
-┃ ${p}dare — Dare challenge
-┃ ${p}wyr — Would you rather
-┃ ${p}joke — Random joke
-┃ ${p}quote — Daily inspiration
+┃ ${p}truth • ${p}dare • ${p}wyr
+┃ ${p}joke • ${p}quote — Fun & inspiration
 ┃ ${p}roast @user — Fun roast 🔥
 ┃ ${p}ship @user1 @user2 — Love %
 ╰──────────────────────────
 
 ╭─── ⏰ *UTILITIES* ────────
 ┃ ${p}calc 5*(3+2) — Calculator
-┃ ${p}remind 30m Task — Reminder
+┃ ${p}remind 30m Task — Set reminder
 ┃ ${p}schedule 2h Message — Send later
 ┃ ${p}poll Q;Opt1;Opt2 — Create poll
 ╰──────────────────────────
@@ -95,44 +99,37 @@ module.exports = {
 ┃ ${p}add 2348XX — Add by number
 ┃ ${p}promote @user — Make admin
 ┃ ${p}demote @user — Remove admin
-┃ ${p}mute / ${p}unmute — Lock/unlock
+┃ ${p}mute / ${p}unmute — Lock/unlock chat
 ┃ ${p}grouplink [revoke] — Invite link
 ┃ ${p}rules — Show/set group rules
 ┃ ${p}welcome on/off — Toggle greet
-┃ ${p}welcome msg <text> — Custom msg
-┃ ${p}welcome goodbye <text> — Bye msg
-┃ ${p}welcome test — Preview
+┃ ${p}welcome msg <text> — Custom message
 ╰──────────────────────────
 
 ╭─── 🛡️ *GROUP PROTECTION* ─
 ┃ 🔐 _Admin-only commands_
 ┃ ${p}antispam on/off — Block spam
 ┃ ${p}antilink on/off — Block links
-┃ ${p}filter add <word> — Block word
-┃ ${p}filter list/remove/clear
-┃ ${p}warn @user [reason] — Warn
-┃ ${p}warns @user — Check warns
+┃ ${p}filter add <word> — Block a word
+┃ ${p}filter list / remove / clear
+┃ ${p}warn @user [reason] — Warn member
+┃ ${p}warns @user — Check warn count
 ┃ ${p}clearwarns @user — Reset warns
 ┃ ⚠️ ${process.env.WARN_LIMIT||3} warns = auto-kick
 ╰──────────────────────────
 
 ╭─── 🤖 *AUTO FEATURES* ───
 ┃ ${p}autoreply add hi|Hello! — Add reply
-┃ ${p}autoreply list/remove/clear
+┃ ${p}autoreply list / remove / clear
 ╰──────────────────────────
 
 ╭─── ⚙️ *OWNER ONLY* ───────
-┃ ${p}setowner — Show current owners
-┃ ${p}setowner add <number> — Add owner
-┃ ${p}setowner remove <number> — Remove
-┃ ${p}setowner set <number> — Replace all
+┃ ${p}setowner — Manage owner numbers
 ┃ ${p}broadcast <msg> — Send to all groups
-┃ ${p}broadcast (reply) — Broadcast quoted
 ┃ ${p}broadcast list — Show all groups
-┃ ${p}anonread — Ghost mode toggle
 ╰──────────────────────────
 
-> 🔤 Prefix: *${p}* | Use *${p}help <cmd>* for details
+> 🔤 Prefix: *${p}*  |  Use *${p}help <cmd>* for full details
 > 📰 News: world tech sport biz health africa
 > ⚽ Sports: soccer nba nfl cricket`
         );
