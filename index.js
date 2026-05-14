@@ -634,5 +634,15 @@ server.listen(PORT, () => {
     });
 });
 
-process.on('uncaughtException', err => console.error('[uncaughtException]', err.message, err.stack?.split('\n')[1] || ''));
-process.on('unhandledRejection', reason => console.error('[unhandledRejection]', reason?.message || reason));
+process.on('uncaughtException', err => {
+    // Filter known harmless Baileys noise
+    const msg = err.message || '';
+    if (/Connection Closed|stream errored|timed out/i.test(msg)) return;
+    logger.error({ err }, '[uncaughtException] ' + msg);
+});
+process.on('unhandledRejection', reason => {
+    const msg = reason?.message || String(reason);
+    // "Connection Closed" fires every time the old socket is torn down during a 440 conflict — harmless
+    if (/Connection Closed|stream errored|timed out/i.test(msg)) return;
+    logger.error({ reason }, '[unhandledRejection] ' + msg);
+});
