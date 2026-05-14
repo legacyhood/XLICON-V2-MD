@@ -4,19 +4,13 @@
  * Requires anonview to be ON so statuses get cached as they arrive.
  */
 
-function isOwner(m) {
-    const owners = global.owners || [];
-    const senderNum = (m.sender || '').split('@')[0].replace(/:\d+$/, '');
-    return owners.some(o => o.split('@')[0].replace(/:\d+$/, '') === senderNum);
-}
-
 module.exports = {
     name: 'statusdl',
     aliases: ['getstatus', 'vstatus'],
     description: 'Download cached statuses for a specific contact',
 
     async execute(sock, m, args) {
-        if (!isOwner(m)) return m.reply('❌ This command is for the owner only.');
+        if (!m.isOwner) return m.reply('❌ This command is for the owner only.');
 
         const cache = global.statusCache;
         if (!cache || cache.size === 0) {
