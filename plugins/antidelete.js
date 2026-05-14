@@ -81,6 +81,7 @@ ${on
         if (!on) return;
         if (!m.id || !m.message) return;
         if (m.from === 'status@broadcast') return;
+        if (m.key?.fromMe) return; // don't save bot's own messages
 
         const db = await getDb();
         if (!db) return;
@@ -112,7 +113,9 @@ ${on
         if (!db) return;
 
         const owners = global.owners || [];
-        const ownerJid = owners[0] || '';
+        let ownerJid = owners[0] || '';
+        // Normalize: ensure JID has the correct domain suffix
+        if (ownerJid && !ownerJid.includes('@')) ownerJid += '@s.whatsapp.net';
 
         for (const key of deletedKeys) {
             if (!key.id) continue;
