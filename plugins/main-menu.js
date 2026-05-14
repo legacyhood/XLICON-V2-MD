@@ -47,6 +47,15 @@ async execute(sock,m){
 ┃ _View-once auto-saved to DM instantly_
 ╰──────────────────────────
 
+╭─── 👤 *USER TOOLS* ──────
+┃ ${p}profile @user — Download profile pic
+┃ ${p}info @user — User details & stats
+┃ ${p}info group — Group info
+┃ ${p}groupstats — Detailed group analytics
+┃ ${p}creator — Bot creator contact card
+┃ ${p}tagme — Mention yourself in chat
+╰──────────────────────────
+
 ╭─── 🔍 *SEARCH & INFO* ───
 ┃ ${p}crypto BTC — Live crypto price
 ┃ ${p}movie <title> — Movie/series info
@@ -78,6 +87,7 @@ async execute(sock,m){
 ┃ ${p}tts — Text to voice note
 ┃ ${p}qr <text> — Generate QR code
 ┃ ${p}meme — Random meme from Reddit
+┃ ${p}couplepp — Random anime couple pics
 ┃ ${p}shorten <url> — Shorten any URL
 ╰──────────────────────────
 
@@ -123,6 +133,7 @@ async execute(sock,m){
 ┃ ${p}note add/list — Group notes
 ┃ ${p}birthday set DD/MM — Track birthdays
 ┃ ${p}leaderboard [week/month] — Top members
+┃ ${p}delete — Delete message (reply to it)
 ┃ ${p}poll Q;A;B;C — Create group poll
 ╰──────────────────────────
 
@@ -158,6 +169,8 @@ async execute(sock,m){
 ┃ ${p}broadcast (reply) — Broadcast quoted msg
 ┃ ${p}broadcast list — Show all groups
 ┃ ${p}spy add/list/remove — Online tracking
+┃ ${p}exec > <code> — Run JS code on server
+┃ ${p}logger — Toggle full message logging
 ╰──────────────────────────
 
 > 🔤 Prefix: *${p}*  |  Use *${p}help <cmd>* for full details
