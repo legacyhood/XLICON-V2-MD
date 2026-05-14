@@ -1,16 +1,7 @@
 let mongoClient = null;
 let db = null;
 
-async function getDb() {
-    if (db) return db;
-    if (!process.env.MONGO_URI) return null;
-    try {
-        mongoClient = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000 });
-        await mongoClient.connect();
-        db = mongoClient.db('xlicon_bot');
-        return db;
-    } catch (e) { return null; }
-}
+const getDb = () => global.getMongoDb();
 
 const WARN_LIMIT = parseInt(process.env.WARN_LIMIT || '3', 10);
 
