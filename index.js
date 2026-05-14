@@ -5,6 +5,7 @@ const path = require('path');
 const http = require('http');
 const QRCode = require('qrcode');
 const { Boom } = require('@hapi/boom');
+const zlib = require('zlib');
 const serializeMessage = require('./handler.js');
 
 global.generateWAMessageFromContent = generateWAMessageFromContent;
@@ -111,6 +112,15 @@ function buildSessionBundle() {
 }
 
 // ── Restore session synchronously before anything else starts ────────────────
+function decompressSession(raw) {
+    if (typeof raw !== 'string') return raw;
+    if (raw.startsWith('XLICON_GZ:')) {
+        const buf = Buffer.from(raw.slice(10), 'base64');
+        return zlib.gunzipSync(buf).toString('utf8');
+    }
+    return raw;
+}
+
 function restoreSessionSync() {
     if (fs.existsSync(__dirname + '/session/creds.json')) {
         console.log('[Session] Session files already present on disk');
@@ -123,7 +133,8 @@ function restoreSessionSync() {
     }
     try {
         fs.mkdirSync(__dirname + '/session', { recursive: true });
-        const parsed = typeof sessionJson === 'string' ? JSON.parse(sessionJson) : sessionJson;
+        const decompressed = decompressSession(sessionJson);
+        const parsed = typeof decompressed === 'string' ? JSON.parse(decompressed) : decompressed;
         if (parsed['creds.json']) {
             for (const [filename, content] of Object.entries(parsed)) {
                 fs.writeFileSync(
@@ -141,15 +152,15 @@ function restoreSessionSync() {
     }
 }
 
-// ── Load MongoDB session async (fallback if no SESSION_ID) ───────────────────
+// ── Load MongoDB session async (always preferred over SESSION_ID env var) ─────
 async function restoreSessionFromMongo() {
     if (fs.existsSync(__dirname + '/session/creds.json')) return;
-    if (global.sessionid) return; // already handled by restoreSessionSync
     const sessionJson = await loadSessionFromMongo();
     if (!sessionJson) return;
     try {
         fs.mkdirSync(__dirname + '/session', { recursive: true });
-        const parsed = typeof sessionJson === 'string' ? JSON.parse(sessionJson) : sessionJson;
+        const decompressed = decompressSession(sessionJson);
+        const parsed = typeof decompressed === 'string' ? JSON.parse(decompressed) : decompressed;
         if (parsed['creds.json']) {
             for (const [filename, content] of Object.entries(parsed)) {
                 fs.writeFileSync(path.join(__dirname, 'session', filename), JSON.stringify(content, null, 2));
@@ -395,8 +406,11 @@ const server = http.createServer((req, res) => {
         if (fs.existsSync(cp)) {
             try {
                 const bundle = buildSessionBundle();
+                const raw = JSON.stringify(bundle);
+                const compressed = zlib.gzipSync(Buffer.from(raw, 'utf8'));
+                const sessionId = 'XLICON_GZ:' + compressed.toString('base64');
                 res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-                res.end(JSON.stringify({ session: JSON.stringify(bundle), fileCount: Object.keys(bundle).length }));
+                res.end(JSON.stringify({ session: sessionId, fileCount: Object.keys(bundle).length, originalSize: raw.length, compressedSize: sessionId.length }));
             } catch (e) {
                 res.writeHead(500); res.end(JSON.stringify({ error: e.message }));
             }
