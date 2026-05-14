@@ -401,6 +401,28 @@ const server = http.createServer((req, res) => {
             await clearSession();
             startBot();
         }, 500);
+    } else if (req.url === '/api/cleardb' && req.method === 'POST') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        if (!process.env.MONGO_URI) {
+            res.end(JSON.stringify({ ok: false, error: 'MONGO_URI not set' }));
+        } else {
+            (async () => {
+                try {
+                    const { MongoClient } = require('mongodb');
+                    const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 5000 });
+                    await c.connect();
+                    const db = c.db('xlicon_bot');
+                    const cacheResult = await db.collection('status_cache').deleteMany({});
+                    const stats = await db.stats();
+                    await c.close();
+                    console.log('[MongoDB] Cleared status_cache:', cacheResult.deletedCount, 'docs');
+                    res.end(JSON.stringify({ ok: true, deletedStatusCache: cacheResult.deletedCount, dbSizeMB: (stats.dataSize / 1024 / 1024).toFixed(2) }));
+                } catch (e) {
+                    console.error('[MongoDB] cleardb failed:', e.message);
+                    res.end(JSON.stringify({ ok: false, error: e.message }));
+                }
+            })();
+        }
     } else if (req.url === '/api/session') {
         const cp = path.join(__dirname, 'session', 'creds.json');
         if (fs.existsSync(cp)) {
