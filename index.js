@@ -200,6 +200,7 @@ function startBot() {
                 } else if (connection === 'open') {
                     botStatus = 'connected';
                     reconnectAttempts = 0;
+                    global.botStartTime = Date.now(); // used by antidelete grace period
                     console.log('[Bot] Connected as', sock.user?.id);
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
