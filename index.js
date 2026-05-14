@@ -24,7 +24,13 @@ const LOG_BUFFER = [];
 const LOG_MAX = 600;
 function pushLog(level, args) {
     const line = args.map(a => (typeof a === 'string' ? a : require('util').inspect(a, { depth: 2 }))).join(' ');
-    if (line.startsWith('Closing session: SessionEntry') || line.startsWith('session closed')) return;
+    if (
+        line.startsWith('Closing session: SessionEntry') ||
+        line.startsWith('session closed') ||
+        line.includes('Bad MAC') ||
+        line.includes('Failed to decrypt message with any known session') ||
+        line.includes('status_cache query timed out after 5s')
+    ) return;
     LOG_BUFFER.push({ t: Date.now(), level, line });
     if (LOG_BUFFER.length > LOG_MAX) LOG_BUFFER.shift();
 }
