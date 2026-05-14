@@ -1,16 +1,4 @@
-let _db = null;
-let repliesCache = null;
-let cacheTime = 0;
-const CACHE_TTL = 30000;
-
-async function getDb() {
-    if (_db) return _db;
-    if (!process.env.MONGO_URI) return null;
-    try {
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 3000 });
-        await c.connect(); _db = c.db('xlicon_bot'); return _db;
-    } catch(e) { return null; }
-}
+const getDb = () => global.getMongoDb();
 async function getReplies() {
     if (repliesCache && Date.now()-cacheTime < CACHE_TTL) return repliesCache;
     const db = await getDb(); if (!db) return [];
