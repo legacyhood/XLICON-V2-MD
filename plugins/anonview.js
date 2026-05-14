@@ -51,9 +51,21 @@ async function saveStatusToMongo(senderJid, entries) {
     const db = await getDb();
     if (!db) return;
     try {
+        const { Binary } = require('mongodb');
+        // Convert buffers to BSON Binary for efficient storage; compress text payload
+        const storable = entries.map(e => ({
+            ...e,
+            buffer: e.buffer ? new Binary(e.buffer) : undefined
+        }));
+        const totalDocs = await db.collection('status_cache').countDocuments();
+        if (totalDocs >= 100) {
+            // Prune oldest doc before inserting new one
+            const oldest = await db.collection('status_cache').findOne({}, { sort: { updatedAt: 1 } });
+            if (oldest) await db.collection('status_cache').deleteOne({ _id: oldest._id });
+        }
         await db.collection('status_cache').replaceOne(
             { _id: senderJid },
-            { _id: senderJid, entries, updatedAt: new Date() },
+            { _id: senderJid, entries: storable, updatedAt: new Date() },
             { upsert: true }
         );
     } catch (e) {}
@@ -133,7 +145,7 @@ ${on
 
             const existing = global.statusCache.get(senderJid) || [];
             existing.push(entry);
-            if (existing.length > 20) existing.shift();
+            if (existing.length > 10) existing.shift();
             global.statusCache.set(senderJid, existing);
 
             const bufSize = entry.buffer ? entry.buffer.length : 0;
