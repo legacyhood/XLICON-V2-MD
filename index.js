@@ -586,6 +586,33 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ ok: false, error: e.message }));
             }
         })();
+
+    } else if (req.url === '/api/reload' && req.method === 'POST') {
+        // Hot-reload all plugins from disk without a full Railway redeploy
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        (async () => {
+            const pluginDir = path.join(__dirname, 'plugins');
+            const files = fs.readdirSync(pluginDir).filter(f => f.endsWith('.js'));
+            let loaded = 0, failed = 0, errors = [];
+            for (const file of files) {
+                const fullPath = path.join(pluginDir, file);
+                try {
+                    delete require.cache[require.resolve(fullPath)];
+                    const plugin = require(fullPath);
+                    if (plugin.name) {
+                        plugins.set(plugin.name, plugin);
+                        (plugin.aliases || []).forEach(a => plugins.set(a, plugin));
+                        if (typeof plugin.onStart === 'function') plugin.onStart(sock).catch(() => {});
+                        loaded++;
+                    }
+                } catch (e) {
+                    errors.push(file + ': ' + e.message);
+                    failed++;
+                }
+            }
+            logger.info(`[Reload] Hot-reload complete: ${loaded} loaded, ${failed} failed`);
+            res.end(JSON.stringify({ ok: true, loaded, failed, errors }));
+        })();
     } else {
         res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' }));
     }
