@@ -70,6 +70,14 @@ async function serializeMessage(sock, msg) {
         (botLidNorm && adminNorms.includes(botLidNorm))
     );
 
+    // Owner check — handles both:
+    //   • DMs: sender is "2348038280548:21@s.whatsapp.net" → senderNorm strips ":21"
+    //   • Groups: sender is "45432214429896@lid" → checked against global.ownerLids
+    const ownerPhoneNorms = (global.owners    || []).map(o => (o || '').replace(/:\d+@/, '@'));
+    const ownerLidNorms   = (global.ownerLids || []).map(o => (o || '').replace(/:\d+@/, '@'));
+    const isOwner = ownerPhoneNorms.includes(senderNormalized) ||
+                    ownerLidNorms.includes(senderNormalized);
+
     let quoted;
     const ctxInfo = msg.message?.extendedTextMessage?.contextInfo;
     if (ctxInfo?.quotedMessage) {
@@ -89,13 +97,27 @@ async function serializeMessage(sock, msg) {
         };
     }
 
+    // Safe send helper — tries with quoted context first; if WhatsApp rejects it
+    // (common in LID groups where quoting a LID participant silently fails),
+    // falls back to a plain send so the reply always arrives.
+    const safeSend = async (payload) => {
+        try {
+            return await sock.sendMessage(from, payload, { quoted: msg });
+        } catch (e) {
+            console.error('[reply] quoted send failed, retrying plain:', e.message?.slice(0, 80));
+            return await sock.sendMessage(from, payload);
+        }
+    };
+
     return {
         id: msg.key.id,
         key: msg.key,
         from,
         sender,
+        senderNorm: senderNormalized,
         pushName,
         isGroup,
+        isOwner,
         groupMetadata,
         isAdmin,
         isBotAdmin,
@@ -111,8 +133,8 @@ async function serializeMessage(sock, msg) {
         message: msg.message,
         isButtonResponse: !!msg.message?.interactiveResponseMessage,
         buttonId: msg.message?.interactiveResponseMessage?.buttonId || null,
-        reply: async (text, options={}) => await sock.sendMessage(from, { text, ...options }, { quoted: msg }),
-        send: async (content, options={}) => await sock.sendMessage(from, typeof content === 'string' ? { text: content, ...options } : content, { quoted: msg }),
+        reply: async (text, options={}) => safeSend({ text, ...options }),
+        send: async (content, options={}) => safeSend(typeof content === 'string' ? { text: content, ...options } : content),
         react: async emoji => await sock.sendMessage(from, { react: { text: emoji, key: msg.key } }),
         forward: async (jid, force=false) => await sock.sendMessage(jid, { forward: msg, force }),
         download: async () => isMedia ? await downloadMediaMessage(msg, 'buffer', {}, sock) : (quoted?.isMedia ? await quoted.download() : null)
