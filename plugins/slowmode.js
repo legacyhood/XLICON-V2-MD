@@ -1,6 +1,5 @@
 const lastMsg=new Map(); // chatJid+senderJid → timestamp
-let _db=null;
-async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
+const getDb = () => global.getMongoDb();
 const slowCache=new Map();
 async function getSlowmode(jid){if(slowCache.has(jid))return slowCache.get(jid);const db=await getDb();const v=db?(await db.collection('slowmode').findOne({_id:jid}))?.seconds||0:0;slowCache.set(jid,v);return v;}
 async function setSlowmode(jid,secs){slowCache.set(jid,secs);const db=await getDb();if(db)await db.collection('slowmode').updateOne({_id:jid},{$set:{seconds:secs}},{upsert:true});}
