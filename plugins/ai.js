@@ -22,17 +22,7 @@ const HISTORY_TTL  = 30 * 60 * 1000; // 30 min idle = clear
 const conversations = new Map();   // chatJid → { messages, lastActive }
 const aiChatCache   = new Map();   // chatJid → boolean
 
-let _db = null;
-async function getDb() {
-    if (_db) return _db;
-    if (!process.env.MONGO_URI) return null;
-    try {
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-        await c.connect();
-        _db = c.db('xlicon_bot');
-        return _db;
-    } catch (e) { return null; }
-}
+const getDb = () => global.getMongoDb();
 
 async function isAiChatOn(chatJid) {
     if (aiChatCache.has(chatJid)) return aiChatCache.get(chatJid);
