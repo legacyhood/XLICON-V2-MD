@@ -17,6 +17,7 @@ global.ANON_READ = false;
 const AUTH_FOLDER = './session';
 const PLUGIN_FOLDER = './plugins';
 const PORT = process.env.PORT || 3000;
+
 // ── Live log capture ─────────────────────────────────────────────────────────
 const LOG_BUFFER = [];
 const LOG_MAX = 600;
@@ -32,15 +33,15 @@ console.log   = (...a) => { pushLog('info',  a); _clog(...a); };
 console.error = (...a) => { pushLog('error', a); _cerr(...a); };
 console.warn  = (...a) => { pushLog('warn',  a); _cwarn(...a); };
 
-
 let latestQR = '';
 let botStatus = 'disconnected';
 let presenceInterval = null;
 let sock = null;
 let reconnectAttempts = 0;
-let generation = 0; // prevents stale socket events from triggering reconnects
+let generation = 0;
+let startBotCalled = false;
 
-// ── In-memory message store (fixes "Waiting for this message") ──────────────
+// ── In-memory message store ──────────────────────────────────────────────────
 const msgStore = new Map();
 function storeMsg(msg) {
     if (!msg?.key?.id || !msg.message) return;
@@ -76,7 +77,6 @@ async function loadSessionFromMongo() {
     } catch (e) { console.error('[MongoDB] Session load failed:', e.message); return null; }
 }
 
-// ── MongoDB: load status cache on startup ────────────────────────────────────
 async function loadStatusCacheFromMongo() {
     if (!process.env.MONGO_URI) return;
     try {
@@ -110,54 +110,56 @@ function buildSessionBundle() {
     return bundle;
 }
 
-// ── Restore session — returns a Promise so startup can await it ──────────────
-// SESSION_ID format: either a multi-file bundle {"creds.json":{...},"pre-key-0.json":{...},...}
-// or legacy format (raw creds.json content). Both are supported.
-const sessionRestored = (async () => {
-    if (!fs.existsSync(__dirname + '/session/creds.json')) {
-        const sessionJson = global.sessionid || await loadSessionFromMongo();
-        if (sessionJson) {
-            try {
-                fs.mkdirSync(__dirname + '/session', { recursive: true });
-                const parsed = typeof sessionJson === 'string' ? JSON.parse(sessionJson) : sessionJson;
-                if (parsed['creds.json']) {
-                    // New multi-file bundle format — restore every file
-                    for (const [filename, content] of Object.entries(parsed)) {
-                        fs.writeFileSync(
-                            path.join(__dirname, 'session', filename),
-                            JSON.stringify(content, null, 2)
-                        );
-                    }
-                    console.log('[Session] Restored', Object.keys(parsed).length, 'session file(s)');
-                } else {
-                    // Legacy format — just creds.json
-                    fs.writeFileSync(__dirname + '/session/creds.json', JSON.stringify(parsed, null, 2));
-                    console.log('[Session] Restored from legacy SESSION_ID (creds.json only)');
-                }
-            } catch (e) { console.error('[Session] Restore error:', e.message); }
-        }
-    } else {
+// ── Restore session synchronously before anything else starts ────────────────
+function restoreSessionSync() {
+    if (fs.existsSync(__dirname + '/session/creds.json')) {
         console.log('[Session] Session files already present on disk');
+        return;
     }
-})();
-
-function loadPrefix() {
+    const sessionJson = global.sessionid;
+    if (!sessionJson) {
+        console.log('[Session] No SESSION_ID set — will show QR code');
+        return;
+    }
     try {
-        const cp = path.join(__dirname, 'config.json');
-        if (fs.existsSync(cp)) {
-            const cfg = JSON.parse(fs.readFileSync(cp, 'utf8'));
-            if (cfg.prefix) { global.BOT_PREFIX = cfg.prefix; }
-            if (Array.isArray(cfg.owners) && cfg.owners.length) {
-                global.owners = cfg.owners;
-                
+        fs.mkdirSync(__dirname + '/session', { recursive: true });
+        const parsed = typeof sessionJson === 'string' ? JSON.parse(sessionJson) : sessionJson;
+        if (parsed['creds.json']) {
+            for (const [filename, content] of Object.entries(parsed)) {
+                fs.writeFileSync(
+                    path.join(__dirname, 'session', filename),
+                    JSON.stringify(content, null, 2)
+                );
             }
+            console.log('[Session] Restored', Object.keys(parsed).length, 'session file(s) from SESSION_ID');
+        } else {
+            fs.writeFileSync(__dirname + '/session/creds.json', JSON.stringify(parsed, null, 2));
+            console.log('[Session] Restored from legacy SESSION_ID (creds.json only)');
         }
-    } catch (_) {}
-    // Wait for session restoration AND status cache before starting bot
-    Promise.all([
-        sessionRestored,
-        loadStatusCacheFromMongo().catch(() => {})
-    ]).finally(() => startBot());
+    } catch (e) {
+        console.error('[Session] Restore error:', e.message);
+    }
+}
+
+// ── Load MongoDB session async (fallback if no SESSION_ID) ───────────────────
+async function restoreSessionFromMongo() {
+    if (fs.existsSync(__dirname + '/session/creds.json')) return;
+    if (global.sessionid) return; // already handled by restoreSessionSync
+    const sessionJson = await loadSessionFromMongo();
+    if (!sessionJson) return;
+    try {
+        fs.mkdirSync(__dirname + '/session', { recursive: true });
+        const parsed = typeof sessionJson === 'string' ? JSON.parse(sessionJson) : sessionJson;
+        if (parsed['creds.json']) {
+            for (const [filename, content] of Object.entries(parsed)) {
+                fs.writeFileSync(path.join(__dirname, 'session', filename), JSON.stringify(content, null, 2));
+            }
+            console.log('[Session] Restored', Object.keys(parsed).length, 'file(s) from MongoDB');
+        } else {
+            fs.writeFileSync(__dirname + '/session/creds.json', JSON.stringify(parsed, null, 2));
+            console.log('[Session] Restored from MongoDB (legacy format)');
+        }
+    } catch (e) { console.error('[Session] MongoDB restore error:', e.message); }
 }
 
 async function clearSession() {
@@ -175,18 +177,24 @@ async function clearSession() {
 }
 
 function startBot() {
+    if (startBotCalled && sock) return; // prevent double-start
+    startBotCalled = true;
     console.log('[Bot] Starting...');
-    // Close old socket before creating new one to prevent duplicate event firing
     if (sock) { try { sock.ws?.terminate(); } catch(_) {} sock = null; }
     const myGen = ++generation;
     if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
 
     (async () => {
         try {
-            const { version } = await fetchLatestWaWebVersion().catch(() => fetchLatestBaileysVersion());
-            
+            console.log('[Bot] Fetching WA version...');
+            const { version } = await fetchLatestWaWebVersion().catch(async (e) => {
+                console.warn('[Bot] fetchLatestWaWebVersion failed:', e.message, '— falling back');
+                return fetchLatestBaileysVersion();
+            });
+            console.log('[Bot] WA version:', version?.join?.('.') || version);
 
             const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
+            console.log('[Bot] Auth state loaded, creating socket...');
 
             sock = makeWASocket({
                 version,
@@ -202,26 +210,26 @@ function startBot() {
                 }
             });
 
-            // ── Connection ───────────────────────────────────────────────────
             sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-                // Ignore events from a previous (stale) socket instance
                 if (generation !== myGen) return;
-                if (qr) QRCode.toDataURL(qr, (err, url) => { if (!err) latestQR = url; });
+                if (qr) {
+                    console.log('[Bot] QR code received');
+                    QRCode.toDataURL(qr, (err, url) => { if (!err) latestQR = url; });
+                }
                 if (connection === 'close') {
                     botStatus = 'disconnected';
                     latestQR = '';
+                    startBotCalled = false;
                     if (presenceInterval) { clearInterval(presenceInterval); presenceInterval = null; }
                     const code = (lastDisconnect?.error instanceof Boom) ? lastDisconnect.error.output.statusCode : 0;
-                    console.log('[Bot] Disconnected, code:', code, 'attempt:', reconnectAttempts + 1);
+                    console.log('[Bot] Disconnected, code:', code, 'reason:', lastDisconnect?.error?.message || 'unknown', 'attempt:', reconnectAttempts + 1);
                     if (code === DisconnectReason.loggedOut) {
-                        // Explicitly logged out — clear everything and show fresh QR
                         console.log('[Bot] Logged out — clearing session');
                         await clearSession();
                         setTimeout(startBot, 3000);
                     } else {
                         reconnectAttempts++;
                         if (reconnectAttempts >= 5) {
-                            // Too many failures with same session — it is stale, clear and show QR
                             console.log('[Bot] Session appears stale after', reconnectAttempts, 'attempts — clearing for fresh QR');
                             await clearSession();
                             reconnectAttempts = 0;
@@ -233,7 +241,7 @@ function startBot() {
                 } else if (connection === 'open') {
                     botStatus = 'connected';
                     reconnectAttempts = 0;
-                    global.botStartTime = Date.now(); // used by antidelete grace period
+                    global.botStartTime = Date.now();
                     console.log('[Bot] Connected as', sock.user?.id);
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
@@ -245,12 +253,12 @@ function startBot() {
                     } catch (_) {}
                 } else if (connection === 'connecting') {
                     botStatus = 'connecting';
+                    console.log('[Bot] Connecting to WhatsApp...');
                 }
             });
 
             sock.ev.on('creds.update', async () => {
                 await saveCreds();
-                // Save the full session bundle (all files) so restoration is complete on next start
                 const bundle = buildSessionBundle();
                 if (bundle['creds.json']) {
                     saveSessionToMongo(JSON.stringify(bundle)).catch(() => {});
@@ -278,7 +286,6 @@ function startBot() {
                 console.log('[Bot] Plugins loaded:', plugins.size);
             }
 
-            // ── Anti-delete ──────────────────────────────────────────────────
             sock.ev.on('messages.delete', async (item) => {
                 try {
                     const ad = plugins.get('antidelete');
@@ -288,7 +295,6 @@ function startBot() {
                 } catch (e) { console.error('[antidelete]', e.message); }
             });
 
-            // ── Group participants update (welcome/goodbye) ───────────────────
             sock.ev.on('group-participants.update', async (update) => {
                 try {
                     const wp = plugins.get('welcome');
@@ -296,24 +302,17 @@ function startBot() {
                 } catch (e) { console.error('[welcome]', e.message); }
             });
 
-            // ── Message handler ───────────────────────────────────────────────
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
-                // Accept notify (new), append, and prepend (history)
                 if (!['notify', 'append', 'prepend'].includes(type)) return;
-
                 for (const rawMsg of messages) {
                     try {
-                        // Status broadcasts → anonview only
                         if (rawMsg.key?.remoteJid === 'status@broadcast') {
                             const av = plugins.get('anonview');
                             if (av?.onStatus) av.onStatus(sock, rawMsg, null).catch(() => {});
                             continue;
                         }
-
                         if (!rawMsg.message) continue;
                         storeMsg(rawMsg);
-
-                        // Auto-save incoming view-once BEFORE unwrap strips the flag
                         {
                             const _voTypes = ['viewOnceMessage','viewOnceMessageV2','viewOnceMessageV2Extension'];
                             if (!rawMsg.key.fromMe && _voTypes.some(t => rawMsg.message[t])) {
@@ -321,8 +320,6 @@ function startBot() {
                                 if (_vop?.onAutoViewOnce) _vop.onAutoViewOnce(sock, rawMsg).catch(() => {});
                             }
                         }
-
-                        // Unwrap view-once, ephemeral etc.
                         const unwrap = (msg) => {
                             for (const w of ['ephemeralMessage','viewOnceMessage','viewOnceMessageV2','viewOnceMessageV2Extension','documentWithCaptionMessage','editedMessage']) {
                                 if (msg[w]?.message) return unwrap(msg[w].message);
@@ -330,8 +327,6 @@ function startBot() {
                             return msg;
                         };
                         rawMsg.message = unwrap(rawMsg.message);
-
-                        // Serialize
                         let m;
                         try {
                             m = await serializeMessage(sock, rawMsg);
@@ -339,16 +334,11 @@ function startBot() {
                             console.error('[serialize]', err.message);
                             continue;
                         }
-
-                        
-
-                        // ── Command routing ───────────────────────────────────
                         if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
                             const parts = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
                             const cmdName = parts.shift().toLowerCase();
                             const args = parts;
                             const plugin = plugins.get(cmdName);
-
                             if (plugin) {
                                 try {
                                     await plugin.execute(sock, m, args);
@@ -357,14 +347,9 @@ function startBot() {
                                     try { await m.reply(`⚠️ Error in command *${cmdName}*: ${err.message.slice(0,100)}`); } catch (_) {}
                                 }
                             }
-                            // Don't run onMessage hooks for commands
                             continue;
                         }
-
-                        // Skip onMessage hooks for the bot's own messages (startup msg, etc.)
                         if (rawMsg.key?.fromMe) continue;
-
-                        // ── onMessage hooks (non-command messages) ────────────
                         for (const plugin of new Set(plugins.values())) {
                             if (typeof plugin.onMessage !== 'function') continue;
                             try {
@@ -373,12 +358,9 @@ function startBot() {
                                     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
                                 ]);
                             } catch (err) {
-                                if (err.message !== 'timeout') {
-                                    console.error(`[onMessage:${plugin.name}]`, err.message);
-                                }
+                                if (err.message !== 'timeout') console.error(`[onMessage:${plugin.name}]`, err.message);
                             }
                         }
-
                     } catch (outerErr) {
                         console.error('[Handler] Outer error:', outerErr.message);
                     }
@@ -386,7 +368,8 @@ function startBot() {
             });
 
         } catch (err) {
-            console.error('[Bot] Startup error:', err.message);
+            console.error('[Bot] Startup error:', err.message, err.stack?.split('\n')[1] || '');
+            startBotCalled = false;
             setTimeout(startBot, 10000);
         }
     })();
@@ -404,16 +387,15 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify({ ok: true, message: 'Clearing session and restarting...' }));
         console.log('[Session] Manual reset triggered via web UI');
+        startBotCalled = false;
         setTimeout(async () => {
             await clearSession();
             startBot();
         }, 500);
     } else if (req.url === '/api/session') {
-        const sessionDir = path.join(__dirname, 'session');
-        const cp = path.join(sessionDir, 'creds.json');
+        const cp = path.join(__dirname, 'session', 'creds.json');
         if (fs.existsSync(cp)) {
             try {
-                // Bundle ALL session files so restoration is complete
                 const bundle = buildSessionBundle();
                 res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
                 res.end(JSON.stringify({ session: JSON.stringify(bundle), fileCount: Object.keys(bundle).length }));
@@ -437,10 +419,36 @@ const server = http.createServer((req, res) => {
     }
 });
 
+// ── Startup sequence ─────────────────────────────────────────────────────────
+// 1. Restore session synchronously (SESSION_ID env var)
+restoreSessionSync();
+
+// 2. Load config overrides
+try {
+    const cp = path.join(__dirname, 'config.json');
+    if (fs.existsSync(cp)) {
+        const cfg = JSON.parse(fs.readFileSync(cp, 'utf8'));
+        if (cfg.prefix) global.BOT_PREFIX = cfg.prefix;
+        if (Array.isArray(cfg.owners) && cfg.owners.length) global.owners = cfg.owners;
+    }
+} catch (_) {}
+
+// 3. Start HTTP server
 server.listen(PORT, () => {
     console.log('[Server] Listening on port', PORT);
-    loadPrefix();
+
+    // 4. Async: restore from MongoDB if needed, load status cache, then start bot
+    (async () => {
+        try {
+            await restoreSessionFromMongo();
+            await loadStatusCacheFromMongo().catch(() => {});
+        } catch (e) {
+            console.error('[Startup] Pre-bot async error:', e.message);
+        }
+        console.log('[Startup] Launching bot...');
+        startBot();
+    })();
 });
 
-process.on('uncaughtException', err => console.error('[uncaughtException]', err.message));
+process.on('uncaughtException', err => console.error('[uncaughtException]', err.message, err.stack?.split('\n')[1] || ''));
 process.on('unhandledRejection', reason => console.error('[unhandledRejection]', reason?.message || reason));
