@@ -10,6 +10,8 @@ module.exports = {
         const mem = (process.memoryUsage().rss/1024/1024).toFixed(1);
         const now = new Date().toLocaleString('en-GB',{timeZone:process.env.TIME_ZONE||'Africa/Lagos'});
         const mode = m.isGroup ? '📢 Group' : '💬 Private';
+        const aiProvider = process.env.GROQ_API_KEY ? 'Groq/Llama 3 🟢' :
+                           process.env.ANTHROPIC_API_KEY ? 'Claude 🟢' : '🔴 Not set';
 
         await m.reply(
 `╭━━━━━━━━━━━━━━━━━━━━━━╮
@@ -31,10 +33,12 @@ module.exports = {
 ╰──────────────────────────
 
 ╭─── 🤖 *AI ASSISTANT* ────
-┃ ${p}ai <question> — Ask Claude AI anything
+┃ Provider: ${aiProvider}
+┃ ${p}ai <question> — Ask XLICON AI anything
 ┃ ${p}ai on — Auto-reply to all msgs here
 ┃ ${p}ai off — Turn off AI auto-reply
 ┃ ${p}aiclear — Reset conversation memory
+┃ ${p}imagine <prompt> — Generate AI image 🎨
 ┃ _Works in personal chat & groups_
 ╰──────────────────────────
 
