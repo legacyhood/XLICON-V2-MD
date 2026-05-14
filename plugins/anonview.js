@@ -2,17 +2,7 @@
  * Anonymous Status Viewer — persists enabled state to MongoDB across restarts.
  */
 
-let _db = null;
-async function getDb() {
-    if (_db) return _db;
-    if (!process.env.MONGO_URI) return null;
-    try {
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
-        await c.connect();
-        _db = c.db('xlicon_bot');
-        return _db;
-    } catch (e) { return null; }
-}
+const getDb = () => global.getMongoDb();
 
 global.statusCache = global.statusCache || new Map();
 const MONGO_SIZE_LIMIT = 15 * 1024 * 1024;
