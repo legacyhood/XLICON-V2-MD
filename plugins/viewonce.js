@@ -6,7 +6,9 @@ module.exports = {
     description: 'Auto-saves incoming view-once media to owner DM silently',
 
     // ── Auto-triggered by index.js BEFORE the view-once wrapper is stripped ──
-    async onAutoViewOnce(sock, rawMsg) {
+    // type='notify' = real-time incoming; type='append' = replayed on reconnect (skip those)
+    async onAutoViewOnce(sock, rawMsg, type) {
+        if (type !== 'notify') return; // don't re-forward pending messages from before deploy
         try {
             const msg = rawMsg.message || {};
             const voTypes = ['viewOnceMessage', 'viewOnceMessageV2', 'viewOnceMessageV2Extension'];
