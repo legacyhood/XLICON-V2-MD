@@ -90,6 +90,8 @@ async function getMongoDb() {
     const db = await _mongoConnecting;
     return db;
 }
+// Expose singleton so plugins can reuse the same connection pool
+global.getMongoDb = getMongoDb;
 
 // Keep MongoDB connection alive — Atlas closes idle sockets after ~60s
 setInterval(async () => {
@@ -365,7 +367,6 @@ function startBot() {
 
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
                 if (generation !== myGen) return; // stale socket guard
-                console.log('[Msg] upsert type:', type, 'count:', messages.length);
                 for (const rawMsg of messages) {
                     try {
                         if (rawMsg.key?.remoteJid === 'status@broadcast') {
@@ -414,7 +415,6 @@ function startBot() {
                             }
                             continue;
                         }
-                        console.log('[Msg] body:', (m.body||'(empty)').slice(0,60), '| from:', m.sender, '| fromMe:', rawMsg.key?.fromMe);
                         if (rawMsg.key?.fromMe) continue;
                         for (const plugin of new Set(plugins.values())) {
                             if (typeof plugin.onMessage !== 'function') continue;
