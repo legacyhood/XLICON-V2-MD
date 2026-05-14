@@ -110,8 +110,23 @@ function loadPrefix() {
     loadStatusCacheFromMongo().catch(() => {}).finally(() => startBot());
 }
 
+async function clearSession() {
+    try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch(_) {}
+    if (process.env.MONGO_URI) {
+        try {
+            const { MongoClient } = require('mongodb');
+            const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
+            await c.connect();
+            await c.db('xlicon_bot').collection('sessions').deleteOne({ _id: 'main_session' });
+            await c.close();
+            console.log('[Session] Cleared from MongoDB');
+        } catch(e) { console.error('[Session] MongoDB clear failed:', e.message); }
+    }
+}
+
 function startBot() {
     console.log('[Bot] Starting...');
+    let reconnectAttempts = 0;
     if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
 
     (async () => {
@@ -140,14 +155,26 @@ function startBot() {
                 if (qr) QRCode.toDataURL(qr, (err, url) => { if (!err) latestQR = url; });
                 if (connection === 'close') {
                     botStatus = 'disconnected';
+                    latestQR = '';
                     if (presenceInterval) { clearInterval(presenceInterval); presenceInterval = null; }
                     const code = (lastDisconnect?.error instanceof Boom) ? lastDisconnect.error.output.statusCode : 0;
-                    console.log('[Bot] Disconnected, code:', code);
-                    if (code !== DisconnectReason.loggedOut) {
-                        setTimeout(startBot, 5000);
-                    } else {
-                        try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch(_) {}
+                    console.log('[Bot] Disconnected, code:', code, 'attempt:', reconnectAttempts + 1);
+                    if (code === DisconnectReason.loggedOut) {
+                        // Explicitly logged out — clear everything and show fresh QR
+                        console.log('[Bot] Logged out — clearing session');
+                        await clearSession();
                         setTimeout(startBot, 3000);
+                    } else {
+                        reconnectAttempts++;
+                        if (reconnectAttempts >= 5) {
+                            // Too many failures with same session — it is stale, clear and show QR
+                            console.log('[Bot] Session appears stale after', reconnectAttempts, 'attempts — clearing for fresh QR');
+                            await clearSession();
+                            reconnectAttempts = 0;
+                            setTimeout(startBot, 3000);
+                        } else {
+                            setTimeout(startBot, 5000);
+                        }
                     }
                 } else if (connection === 'open') {
                     botStatus = 'connected';
@@ -307,10 +334,18 @@ function startBot() {
 const server = http.createServer((req, res) => {
     if (req.url === '/' || req.url === '/qr') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(`<!DOCTYPE html><html><head><title>XLICON-V2-MD</title><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:sans-serif;background:#111;color:#eee;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box}h1{color:#25d366}#qr img{max-width:280px;border:6px solid #25d366;border-radius:12px;background:#fff;padding:10px}#qr .msg{font-size:1.1em;color:#25d366;padding:30px;border:2px dashed #25d366;border-radius:12px;text-align:center}#status{margin-top:16px;padding:8px 20px;border-radius:20px;font-weight:bold}.connected{background:#25d366;color:#000}.waiting{background:#333;color:#aaa}#sb{display:none;margin-top:20px;width:100%;max-width:580px}#sb h3{color:#25d366}#sb textarea{width:100%;height:110px;background:#222;color:#eee;border:1px solid #25d366;border-radius:8px;padding:10px;font-size:12px;resize:vertical;box-sizing:border-box}#sb button{margin-top:8px;padding:10px 20px;background:#25d366;color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:bold}</style></head><body><h1>🤖 XLICON-V2-MD</h1><div id="qr"><div class="msg">⏳ Loading...</div></div><div id="status" class="waiting">Starting...</div><div id="sb"><h3>✅ Connected — Save your Session ID</h3><textarea id="sv" readonly></textarea><br><button onclick="const t=document.getElementById('sv');t.select();document.execCommand('copy')">Copy</button></div><script>async function poll(){try{const r=await fetch('/api/status');const d=await r.json();const q=document.getElementById('qr');const s=document.getElementById('status');if(d.status==='connected'){q.innerHTML='<div class="msg">✅ Bot Connected!</div>';s.textContent='Connected ✅';s.className='connected';const sr=await fetch('/api/session');const sj=await sr.json();if(sj.session){document.getElementById('sb').style.display='block';document.getElementById('sv').value=sj.session;}}else if(d.hasQR&&d.qr){q.innerHTML='<img src="'+d.qr+'" alt="QR">';s.textContent='Scan QR code ↑';s.className='waiting';}else{q.innerHTML='<div class="msg">⏳ Connecting...</div>';s.textContent=d.status;s.className='waiting';}}catch(e){}setTimeout(poll,4000);}poll();</script></body></html>`);
+        res.end(`<!DOCTYPE html><html><head><title>XLICON-V2-MD</title><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:sans-serif;background:#111;color:#eee;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box}h1{color:#25d366}#qr img{max-width:280px;border:6px solid #25d366;border-radius:12px;background:#fff;padding:10px}#qr .msg{font-size:1.1em;color:#25d366;padding:30px;border:2px dashed #25d366;border-radius:12px;text-align:center}#status{margin-top:16px;padding:8px 20px;border-radius:20px;font-weight:bold}.connected{background:#25d366;color:#000}.waiting{background:#333;color:#aaa}#sb{display:none;margin-top:20px;width:100%;max-width:580px}#sb h3{color:#25d366}#sb textarea{width:100%;height:110px;background:#222;color:#eee;border:1px solid #25d366;border-radius:8px;padding:10px;font-size:12px;resize:vertical;box-sizing:border-box}#sb button{margin-top:8px;padding:10px 20px;background:#25d366;color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:bold}#resetBtn{margin-top:16px;padding:10px 24px;background:#e53935;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:bold;font-size:14px;display:block;width:100%;max-width:260px}</style></head><body><h1>🤖 XLICON-V2-MD</h1><div id="qr"><div class="msg">⏳ Loading...</div></div><div id="status" class="waiting">Starting...</div><div id="sb"><h3>✅ Connected — Save your Session ID</h3><textarea id="sv" readonly></textarea><br><button onclick="const t=document.getElementById('sv');t.select();document.execCommand('copy')">Copy</button></div><button id="resetBtn" onclick="resetSession()">🔄 Reset Session (New QR)</button><p id="resetMsg" style="color:#e53935;font-size:13px;display:none">Clearing session... reload in 5 seconds</p><script>async function resetSession(){if(!confirm('Clear the current session and show a fresh QR code?'))return;document.getElementById('resetMsg').style.display='block';await fetch('/api/reset',{method:'POST'});setTimeout(()=>location.reload(),5000);}async function poll(){try{const r=await fetch('/api/status');const d=await r.json();const q=document.getElementById('qr');const s=document.getElementById('status');if(d.status==='connected'){q.innerHTML='<div class="msg">✅ Bot Connected!</div>';s.textContent='Connected ✅';s.className='connected';const sr=await fetch('/api/session');const sj=await sr.json();if(sj.session){document.getElementById('sb').style.display='block';document.getElementById('sv').value=sj.session;}}else if(d.hasQR&&d.qr){q.innerHTML='<img src="'+d.qr+'" alt="QR">';s.textContent='Scan QR code ↑';s.className='waiting';}else{q.innerHTML='<div class="msg">⏳ Connecting...</div>';s.textContent=d.status;s.className='waiting';}}catch(e){}setTimeout(poll,4000);}poll();</script></body></html>`);
     } else if (req.url === '/api/status') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify({ status: botStatus, hasQR: !!latestQR, qr: latestQR, prefix: global.BOT_PREFIX, uptime: process.uptime() }));
+    } else if (req.url === '/api/reset' && req.method === 'POST') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ ok: true, message: 'Clearing session and restarting...' }));
+        console.log('[Session] Manual reset triggered via web UI');
+        setTimeout(async () => {
+            await clearSession();
+            startBot();
+        }, 500);
     } else if (req.url === '/api/session') {
         const cp = path.join(__dirname, 'session', 'creds.json');
         if (fs.existsSync(cp)) {
