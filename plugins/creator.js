@@ -1,36 +1,31 @@
 module.exports = {
     name: 'creator',
-    description: 'Creator/Owner contacts',
-    aliases: ['owner', 'creator', 'Gowner'],
-    tags: ['main'],
-    command: /^(owner|creator|Gowner)$/i,
+    description: 'Show owner/creator contact card',
+    aliases: ['owner', 'Gowner'],
 
     async execute(sock, m) {
         try {
-            const owners = [
-                ['233533763772@s.whatsapp.net', 'Abraham']
-            ];
+            const owners = global.owners || [];
+            if (!owners.length) return m.reply('❌ No owner configured. Set BOT_OWNER_JID in environment.');
 
-            const contacts = owners.map(([id, name]) => ({
-                displayName: name,
-                vcard: `BEGIN:VCARD
+            const contacts = owners.map(jid => {
+                const num = jid.split('@')[0].replace(/:d+$/, '');
+                return {
+                    displayName: 'XLICON Owner',
+                    vcard: 'BEGIN:VCARD
 VERSION:3.0
-N:;${name};;;
-FN:${name}
-TEL;waid=${id.split('@')[0]}:${id.split('@')[0]}
-X-WA-BIZ-DESCRIPTION:XLIOCN V2 MAIN OWNER
-X-WA-BIZ-NAME:${name}
-END:VCARD`
-            }));
-
-            await sock.sendMessage(m.from, {
-                contacts: { contacts }
+N:;XLICON Owner;;;
+FN:XLICON Owner
+TEL;waid=' + num + ':' + num + '
+X-WA-BIZ-NAME:XLICON V2-MD
+END:VCARD'
+                };
             });
 
+            await sock.sendMessage(m.from, { contacts: { contacts } });
         } catch (err) {
-            console.error(' Creator command error:', err);
-
-            if (m?.reply) await m.reply('An error occurred while fetching the creator info.');
+            console.error('[creator]', err.message);
+            await m.reply('❌ Error fetching owner contact.').catch(() => {});
         }
     }
 };
