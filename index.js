@@ -223,20 +223,18 @@ function startBot() {
                     if (presenceInterval) { clearInterval(presenceInterval); presenceInterval = null; }
                     const code = (lastDisconnect?.error instanceof Boom) ? lastDisconnect.error.output.statusCode : 0;
                     console.log('[Bot] Disconnected, code:', code, 'reason:', lastDisconnect?.error?.message || 'unknown', 'attempt:', reconnectAttempts + 1);
-                    if (code === DisconnectReason.loggedOut) {
-                        console.log('[Bot] Logged out — clearing session');
+                    if (code === DisconnectReason.loggedOut || code === 401) {
+                        // WhatsApp explicitly logged us out — only then clear session
+                        console.log('[Bot] Logged out by WhatsApp — clearing session for fresh QR');
                         await clearSession();
+                        reconnectAttempts = 0;
                         setTimeout(startBot, 3000);
                     } else {
+                        // Network blip, Railway restart, etc. — keep the same session and retry
                         reconnectAttempts++;
-                        if (reconnectAttempts >= 5) {
-                            console.log('[Bot] Session appears stale after', reconnectAttempts, 'attempts — clearing for fresh QR');
-                            await clearSession();
-                            reconnectAttempts = 0;
-                            setTimeout(startBot, 3000);
-                        } else {
-                            setTimeout(startBot, 5000);
-                        }
+                        const delay = Math.min(5000 * reconnectAttempts, 60000); // backoff up to 60s
+                        console.log('[Bot] Retrying in', delay / 1000 + 's', '(keeping session)...');
+                        setTimeout(startBot, delay);
                     }
                 } else if (connection === 'open') {
                     botStatus = 'connected';
