@@ -460,13 +460,21 @@ const server = http.createServer((req, res) => {
                 const raw = JSON.stringify(bundle);
                 const compressed = zlib.gzipSync(Buffer.from(raw, 'utf8'));
                 const sessionId = 'XLICON_GZ:' + compressed.toString('base64');
-                res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-                res.end(JSON.stringify({ session: sessionId, fileCount: Object.keys(bundle).length, originalSize: raw.length, compressedSize: sessionId.length }));
+                const fileCount = Object.keys(bundle).length;
+                const sizeKb = (sessionId.length / 1024).toFixed(1);
+                const html = `<!DOCTYPE html><html><head><title>Session ID — XLICON-V2-MD</title><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:sans-serif;background:#111;color:#eee;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}h1{color:#25d366;font-size:22px;margin-bottom:6px}.sub{color:#888;font-size:13px;margin-bottom:28px}.card{background:#1a1a1a;border:1.5px solid #25d366;border-radius:14px;padding:24px;width:100%;max-width:640px}.label{font-size:12px;font-weight:700;color:#25d366;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}.box{background:#0d0d0d;border:1px solid #2a2a2a;border-radius:8px;padding:14px;font-family:monospace;font-size:11px;color:#aaa;word-break:break-all;max-height:160px;overflow-y:auto;line-height:1.7;cursor:text}.meta{display:flex;gap:20px;margin-top:12px;font-size:12px;color:#555}.meta span b{color:#777}.btn{margin-top:18px;width:100%;padding:14px;background:#25d366;color:#000;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.3px}.btn:active{transform:scale(.98)}.btn.copied{background:#1565c0;color:#fff}.warn{margin-top:14px;font-size:12px;color:#555;text-align:center;line-height:1.7}a.back{display:inline-block;margin-top:22px;color:#25d366;font-size:13px;text-decoration:none;opacity:.65}a.back:hover{opacity:1}</style></head><body><h1>📋 Session ID</h1><p class="sub">Use this to set your SESSION_ID variable on Railway</p><div class="card"><div class="label">Session ID</div><div class="box" id="sid">__SESSION_ID__</div><div class="meta"><span><b>Files:</b> __FILE_COUNT__</span><span><b>Size:</b> __SIZE__ KB</span></div><button class="btn" id="btn" onclick="copy()">Copy Session ID</button></div><p class="warn">Keep this private — it gives full access to your WhatsApp account.</p><a class="back" href="/">← Back to bot</a><script>function copy(){var t=document.getElementById('sid').innerText;if(navigator.clipboard){navigator.clipboard.writeText(t).then(ok).catch(fallback);}else{fallback();}}function ok(){var b=document.getElementById('btn');b.textContent='✅ Copied!';b.classList.add('copied');setTimeout(function(){b.textContent='Copy Session ID';b.classList.remove('copied');},3000);}function fallback(){var r=document.createRange();r.selectNode(document.getElementById('sid'));window.getSelection().removeAllRanges();window.getSelection().addRange(r);document.execCommand('copy');ok();}</script></body></html>`
+                    .replace('__SESSION_ID__', sessionId)
+                    .replace('__FILE_COUNT__', fileCount)
+                    .replace('__SIZE__', sizeKb);
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Access-Control-Allow-Origin': '*' });
+                res.end(html);
             } catch (e) {
-                res.writeHead(500); res.end(JSON.stringify({ error: e.message }));
+                res.writeHead(500, { 'Content-Type': 'text/html' });
+                res.end('<body style="font-family:sans-serif;background:#111;color:#e53935;padding:40px"><h2>Error: ' + e.message + '</h2></body>');
             }
         } else {
-            res.writeHead(404); res.end(JSON.stringify({ error: 'No session yet' }));
+            res.writeHead(404, { 'Content-Type': 'text/html' });
+            res.end('<body style="font-family:sans-serif;background:#111;color:#888;padding:40px"><h2>No session yet — wait for the bot to connect first.</h2></body>');
         }
     } else if (req.url.startsWith('/api/logs')) {
         const params = new URL(req.url, 'http://localhost').searchParams;
