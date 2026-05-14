@@ -55,7 +55,7 @@ async function saveSessionToMongo(bundle) {
     if (!process.env.MONGO_URI) return;
     try {
         const { MongoClient } = require('mongodb');
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 5000 });
+        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
         await c.connect();
         await c.db('xlicon_bot').collection('sessions').replaceOne(
             { _id: 'main_session' },
@@ -70,7 +70,7 @@ async function loadSessionFromMongo() {
     if (!process.env.MONGO_URI) return null;
     try {
         const { MongoClient } = require('mongodb');
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 5000 });
+        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
         await c.connect();
         const doc = await c.db('xlicon_bot').collection('sessions').findOne({ _id: 'main_session' });
         await c.close();
@@ -82,7 +82,7 @@ async function loadStatusCacheFromMongo() {
     if (!process.env.MONGO_URI) return;
     try {
         const { MongoClient } = require('mongodb');
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 5000 });
+        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
         await c.connect();
         const docs = await c.db('xlicon_bot').collection('status_cache').find({}).toArray();
         await c.close();
@@ -178,7 +178,7 @@ async function clearSession() {
     if (process.env.MONGO_URI) {
         try {
             const { MongoClient } = require('mongodb');
-            const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 5000 });
+            const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
             await c.connect();
             await c.db('xlicon_bot').collection('sessions').deleteOne({ _id: 'main_session' });
             await c.close();
@@ -409,7 +409,7 @@ const server = http.createServer((req, res) => {
             (async () => {
                 try {
                     const { MongoClient } = require('mongodb');
-                    const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000, socketTimeoutMS: 5000 });
+                    const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
                     await c.connect();
                     const db = c.db('xlicon_bot');
                     const cacheResult = await db.collection('status_cache').deleteMany({});
