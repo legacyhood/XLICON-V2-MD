@@ -1,5 +1,5 @@
 let _db=null;
-async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const{MongoClient}=require('mongodb');const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
+async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
 const blacklistCache=new Set();
 let cacheLoaded=false;
 async function loadCache(){
@@ -12,7 +12,7 @@ async function loadCache(){
 module.exports={name:'blacklist',aliases:['bl','ban','unban','globalban'],description:'Globally ban a number from using the bot in any chat — owner only',
 async execute(sock,m,args){
     const owners=global.owners||[];
-    const isOwner=owners.some(o=>o.split('@')[0]===(m.sender||'').split('@')[0]);
+    const isOwner = m.isOwner;[0]===(m.sender||'').split('@')[0]);
     if(!isOwner) return m.reply('❌ Owner only command.');
     const db=await getDb(); if(!db) return m.reply('❌ MongoDB not connected.');
     await loadCache();
