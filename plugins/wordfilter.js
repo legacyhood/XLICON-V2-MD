@@ -1,13 +1,7 @@
 const WARN_LIMIT = parseInt(process.env.WARN_LIMIT || '3', 10);
 const filterCache = new Map();
 const CACHE_TTL = 60000;
-let _db = null;
-async function getDb() {
-    if (_db) return _db;
-    if (!process.env.MONGO_URI) return null;
-    try { const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 3000 }); await c.connect(); _db = c.db('xlicon_bot'); return _db; }
-    catch(e) { return null; }
-}
+const getDb = () => global.getMongoDb();
 async function getFilteredWords(groupId) {
     const c = filterCache.get(groupId);
     if (c && Date.now()-c.cachedAt < CACHE_TTL) return c.words;
