@@ -1,395 +1,91 @@
-module.exports = {
-    name: 'help',
-    aliases: ['h', 'howto'],
-    description: 'Get detailed info about a specific command, or browse the full command list',
-
-    async execute(sock, m, args) {
-        const p = global.BOT_PREFIX || '.';
-        const wl = process.env.WARN_LIMIT || '3';
-
-        const commands = {
-
-            ping: {
-                category: '📊 Status & Info',
-                desc: "Check the bot's response speed, current uptime, RAM usage, and CPU load all in one message. Useful to confirm the bot is alive and not lagging.",
-                usage: `${p}ping`,
-                aliases: 'speed, latency, status'
-            },
-            alive: {
-                category: '📊 Status & Info',
-                desc: 'A quick check to confirm the bot is online and responding. Returns a brief status card.',
-                usage: `${p}alive`,
-                aliases: 'none'
-            },
-            uptime: {
-                category: '📊 Status & Info',
-                desc: 'Shows exactly how long the bot has been running since its last restart.',
-                usage: `${p}uptime`,
-                aliases: 'up'
-            },
-            menu: {
-                category: '📊 Status & Info',
-                desc: 'Displays the full command menu organised by category with a quick description of each command.',
-                usage: `${p}menu`,
-                aliases: 'commands, list, cmds'
-            },
-
-            ai: {
-                category: '🤖 AI Assistant',
-                desc: `Chat with XLICON AI, powered by Groq (Llama 3.1) for free — no limits for normal use. The bot remembers your full conversation for up to 30 minutes of inactivity so follow-up questions work naturally.
-
-How to get your FREE Groq key:
-1. Go to https://console.groq.com
-2. Sign up (no credit card needed)
-3. Click API Keys and create one
-4. Add GROQ_API_KEY to Railway environment variables
-5. Redeploy — done!
-
-Sub-commands:
-- ${p}ai <question> — Ask anything (supports follow-ups)
-- ${p}ai on — XLICON AI replies to EVERY message in this chat automatically
-- ${p}ai off — Stop auto-reply (manual .ai <question> still works)
-- ${p}aiclear — Wipe the conversation memory and start fresh
-
-Works in personal chat and groups. In groups, only admins can toggle auto-reply mode.`,
-                usage: `${p}ai Who is the richest man in the world?
-${p}ai Tell me more about him
-${p}ai on
-${p}ai off
-${p}aiclear`,
-                aliases: 'ask, claude, llm, bot'
-            },
-
-            imagine: {
-                category: '🤖 AI Assistant',
-                desc: `Generate an AI image from any text description — completely free, no API key needed at all. Powered by Pollinations AI.
-
-Just describe what you want to see in plain language. The more specific and descriptive your prompt, the better the result. Works in personal chat and groups.
-
-Tips for great results:
-- Be descriptive: "a realistic portrait of an African queen with golden jewellery, sunset lighting" is better than "african queen"
-- Include style hints: "digital art", "photorealistic", "oil painting", "anime style"
-- Mention lighting, mood, setting for richer images`,
-                usage: `${p}imagine a golden sunset over Lagos waterfront
-${p}imagine futuristic African city at night, neon lights
-${p}imagine cute baby lion cub in tall grass, photorealistic
-${p}imagine portrait of a Nigerian king, traditional attire, royal`,
-                aliases: 'img, generate, draw, image, paint'
-            },
-
-            profile: {
-                category: '👤 User Tools',
-                desc: 'Downloads and sends the WhatsApp profile picture of any user. Target someone by replying to their message, mentioning them with @, or typing their phone number directly.',
-                usage: `${p}profile @user
-${p}profile 2348XXXXXXXXX
-${p}profile  (reply to any message)`,
-                aliases: 'pp, dp, profilepic'
-            },
-            info: {
-                category: '👤 User Tools',
-                desc: 'Fetches detailed information about a user (name, number, about) or about the current group (name, description, member count, creation date, admin list).',
-                usage: `${p}info @user
-${p}info 2348XXXXXXXXX
-${p}info group`,
-                aliases: 'whois, userinfo, groupinfo'
-            },
-
-            anonread: {
-                category: '👻 Privacy & Stealth',
-                desc: `Toggles ghost mode. When ON, the bot never sends read receipts — so anyone who messages you only sees grey double ticks, never blue ticks. They cannot tell whether you have seen their message.
-
-This is one-way: ghost mode hides YOUR read receipts from others. You can still see blue ticks when others read your messages normally.
-
-Setting is saved to MongoDB and survives Railway restarts automatically.`,
-                usage: `${p}anonread  (toggle ON)
-${p}anonread  (toggle OFF — run again)`,
-                aliases: 'ghostmode, ghost, readanon'
-            },
-            anonview: {
-                category: '👻 Privacy & Stealth',
-                desc: `Toggles silent status caching. When ON, every status update posted by your contacts is silently saved — the poster never receives a seen receipt from you.
-
-Storage rules:
-- Files 15MB or smaller: saved to MongoDB, survive restarts
-- Files larger than 15MB: kept in memory only, cleared on restart
-
-Use .statusdl to retrieve cached statuses on demand. Setting survives restarts.`,
-                usage: `${p}anonview  (toggle ON)
-${p}anonview  (toggle OFF)`,
-                aliases: 'sv, statusview, viewstatus'
-            },
-            statusdl: {
-                category: '👻 Privacy & Stealth',
-                desc: `Downloads and sends you the cached statuses of a specific contact. Requires .anonview to be ON first so statuses are being cached as contacts post them.
-
-Sub-commands:
-- list — See all contacts who have cached statuses
-- <number> — Get all statuses saved for that phone number sent to your DM
-- clear — Delete all cached statuses from MongoDB`,
-                usage: `${p}statusdl list
-${p}statusdl 2348012345678
-${p}statusdl clear`,
-                aliases: 'getstatus, vstatus'
-            },
-            viewonce: {
-                category: '👻 Privacy & Stealth',
-                desc: "View-once photos and videos are saved automatically to your private DM the moment they arrive — no command needed, and no trace is left in the original chat. The sender has no idea it was saved. The manual command is a backup for testing in your own self-chat only.",
-                usage: `(Fully automatic — no command needed)
-${p}viewonce  (self-chat only, as backup)`,
-                aliases: 'vo, once, reveal'
-            },
-            antidelete: {
-                category: '👻 Privacy & Stealth',
-                desc: `Toggles anti-delete monitoring. When ON, every message the bot receives is quietly saved to MongoDB. If anyone deletes their message — in any group or DM — the original content is immediately forwarded to your DM before it disappears forever.
-
-Covers groups and private chats. Media filenames are recorded but the raw file cannot be recovered after WhatsApp deletes it from their servers. Setting survives restarts.`,
-                usage: `${p}antidelete  (toggle ON)
-${p}antidelete  (toggle OFF)`,
-                aliases: 'ad, nodelete'
-            },
-
-            sticker: {
-                category: '🎨 Media & Stickers',
-                desc: 'Converts an image or video clip into a WhatsApp sticker. Reply to or send the image/video with this command. Optionally set a custom pack name and author by adding them after the command separated by a pipe (|).',
-                usage: `${p}sticker  (reply to image or video)
-${p}sticker MyPack|AuthorName  (reply to image)`,
-                aliases: 's, take, stkr'
-            },
-            steal: {
-                category: '🎨 Media & Stickers',
-                desc: 'Re-packages an existing sticker under your own pack name and author tag. Reply to any sticker with this command.',
-                usage: `${p}steal  (reply to sticker)
-${p}steal MyPackName  (reply to sticker)`,
-                aliases: 'takesticker, getsticker'
-            },
-            toimg: {
-                category: '🎨 Media & Stickers',
-                desc: 'Converts a sticker back into a regular image file. Reply to the sticker you want to convert.',
-                usage: `${p}toimg  (reply to sticker)`,
-                aliases: 'stickertoimg, stoi, unpack'
-            },
-            tts: {
-                category: '🎨 Media & Stickers',
-                desc: 'Converts any text into a WhatsApp voice note using text-to-speech. The bot sends it as an audio message.',
-                usage: `${p}tts Good morning, how are you today?`,
-                aliases: 'voice'
-            },
-            poll: {
-                category: '🎨 Media & Stickers',
-                desc: 'Creates a WhatsApp poll in the current chat. Separate the question from each option with a semicolon (;). You can add up to 12 options.',
-                usage: `${p}poll Best colour?;Red;Blue;Green;Yellow`,
-                aliases: 'none'
-            },
-
-            admins: {
-                category: '👥 Group Admin',
-                desc: "Lists all admins in the current group organised by role. Group owners are shown separately from regular admins. Your own name is marked with 👈 You and the bot's entry is marked with 🤖.",
-                usage: `${p}admins`,
-                aliases: 'adminlist, listadmins, groupadmins'
-            },
-            tagall: {
-                category: '👥 Group Admin',
-                desc: 'Mentions every member of the group in a single message, sending each one a notification. You can add an optional message above the mentions. Admin only.',
-                usage: `${p}tagall
-${p}tagall Please read the pinned message!`,
-                aliases: 'everyone, all, mentionall'
-            },
-            kick: {
-                category: '👥 Group Admin',
-                desc: 'Removes a member from the group. You must be a group admin AND the bot must also be an admin. Target someone by replying to their message or mentioning them with @.',
-                usage: `${p}kick @user
-${p}kick  (reply to their message)`,
-                aliases: 'remove, ban'
-            },
-            add: {
-                category: '👥 Group Admin',
-                desc: 'Adds a person to the group using their phone number. Both you and the bot must be group admins. If the person has privacy settings preventing them from being added, you will get a clear error message.',
-                usage: `${p}add 2348012345678`,
-                aliases: 'addmember'
-            },
-            promote: {
-                category: '👥 Group Admin',
-                desc: 'Promotes a regular group member to admin status. Both you and the bot must be group admins for this to work.',
-                usage: `${p}promote @user
-${p}promote  (reply to their message)`,
-                aliases: 'makeadmin, admin'
-            },
-            demote: {
-                category: '👥 Group Admin',
-                desc: 'Removes admin status from a group admin, returning them to a regular member. Both you and the bot must be admins.',
-                usage: `${p}demote @user
-${p}demote  (reply to their message)`,
-                aliases: 'unadmin, removeadmin'
-            },
-            mute: {
-                category: '👥 Group Admin',
-                desc: 'Locks the group so that only admins can send messages. Regular members cannot chat until an admin runs .unmute. Admin only.',
-                usage: `${p}mute`,
-                aliases: 'close, lock'
-            },
-            unmute: {
-                category: '👥 Group Admin',
-                desc: 'Unlocks a muted group, restoring the ability for all members to send messages. Admin only.',
-                usage: `${p}unmute`,
-                aliases: 'open, unlock'
-            },
-            grouplink: {
-                category: '👥 Group Admin',
-                desc: 'Fetches the current group invite link. Use the revoke sub-command to generate a brand new link and permanently invalidate the old one.',
-                usage: `${p}grouplink
-${p}grouplink revoke`,
-                aliases: 'invitelink, link, invite'
-            },
-            rules: {
-                category: '👥 Group Admin',
-                desc: 'Displays the group rules. Admins can set or update the rules at any time, or clear them entirely. Anyone can read the rules.',
-                usage: `${p}rules
-${p}rules set 1. Be respectful. 2. No spam.
-${p}rules clear`,
-                aliases: 'setrules, grouprules, rule'
-            },
-            welcome: {
-                category: '👥 Group Admin',
-                desc: `Manages the welcome and goodbye message system. When enabled, the bot automatically greets new members and says goodbye to leaving ones.
-
-Variables for your message:
-- {name} — member display name
-- {group} — group name
-- {count} — current member count
-- {numjid} — phone number (for @mention)`,
-                usage: `${p}welcome on
-${p}welcome off
-${p}welcome msg Welcome to {group}, {name}! 🎉
-${p}welcome goodbye Goodbye {name}, we will miss you!
-${p}welcome test`,
-                aliases: 'setwelcome, goodbye, greet'
-            },
-
-            antispam: {
-                category: '🛡️ Group Protection',
-                desc: `Enables or disables spam protection. When ON, the bot monitors each non-admin member's message rate. Sending too many messages too quickly triggers automatic deletion and a warning. After ${wl} warnings the member is auto-kicked.
-
-Thresholds are set by SPAM_MSG_LIMIT and SPAM_TIME_WINDOW on Railway.`,
-                usage: `${p}antispam on
-${p}antispam off`,
-                aliases: 'as, spamprotect'
-            },
-            antilink: {
-                category: '🛡️ Group Protection',
-                desc: `Enables or disables link blocking. When ON, any URL posted by a non-admin is automatically deleted and the sender gets a warning. After ${wl} warnings they are auto-kicked.
-
-Detects: http/https, wa.me, t.me, WhatsApp invites, bit.ly, tinyurl, YouTube, and more.`,
-                usage: `${p}antilink on
-${p}antilink off`,
-                aliases: 'al, linkprotect, nolink'
-            },
-            filter: {
-                category: '🛡️ Group Protection',
-                desc: `Manages a blocked-word list. When a non-admin sends a message containing any filtered word, the message is deleted and the sender gets a warning. After ${wl} warnings they are auto-kicked.
-
-Sub-commands:
-- add <word> — Add a word to the filter
-- remove <word> — Remove a word
-- list — Show all filtered words
-- clear — Remove all words`,
-                usage: `${p}filter add badword
-${p}filter remove badword
-${p}filter list
-${p}filter clear`,
-                aliases: 'wordfilter, badword'
-            },
-            warn: {
-                category: '🛡️ Group Protection',
-                desc: `Issues a formal warning to a group member saved in MongoDB. After ${wl} warnings the member is automatically removed and their count is reset. You can add an optional reason. Cannot warn admins.`,
-                usage: `${p}warn @user
-${p}warn @user Posting inappropriate content`,
-                aliases: 'warning'
-            },
-            warns: {
-                category: '🛡️ Group Protection',
-                desc: "Checks the warning count for a group member. Shows how many warnings they have, the limit, and the reason for each warning. Any member can check — not just admins.",
-                usage: `${p}warns @user
-${p}warns  (reply to their message)`,
-                aliases: 'none'
-            },
-            clearwarns: {
-                category: '🛡️ Group Protection',
-                desc: 'Resets all warnings for a member back to zero. Gives them a clean slate. Admin only.',
-                usage: `${p}clearwarns @user
-${p}clearwarns  (reply to their message)`,
-                aliases: 'resetwarn, unwarn, removewarn'
-            },
-
-            setowner: {
-                category: '⚙️ Owner Only',
-                desc: `Manages bot owner numbers directly from WhatsApp. Changes are saved to MongoDB and survive restarts. Only the current owner can use this.
-
-Sub-commands:
-- (no args) — Show current owner list
-- add <number> — Add a new owner
-- remove <number> — Remove an owner
-- set <number> — Replace all owners with one number`,
-                usage: `${p}setowner
-${p}setowner add 2348012345678
-${p}setowner remove 2348012345678
-${p}setowner set 2348012345678`,
-                aliases: 'owner, addowner, removeowner'
-            },
-            broadcast: {
-                category: '⚙️ Owner Only',
-                desc: 'Sends a message to every group the bot is in. You can broadcast plain text or reply to an image/video/text to broadcast that content. Use .broadcast list first to see all the groups.',
-                usage: `${p}broadcast Hello everyone! 📢
-${p}broadcast  (reply to any image or video)
-${p}broadcast list`,
-                aliases: 'bc, announce'
-            },
-            exec: {
-                category: '⚙️ Owner Only',
-                desc: 'Executes raw JavaScript code on the bot server and returns the result. Use with caution — gives full Node.js access.',
-                usage: `${p}exec process.version`,
-                aliases: '>'
-            }
-        };
-
-        if (!args.length) {
-            const categories = {};
-            for (const [name, cmd] of Object.entries(commands)) {
-                if (!categories[cmd.category]) categories[cmd.category] = [];
-                categories[cmd.category].push({ name, cmd });
-            }
-            let text = `╭━━━━━━━━━━━━━━━━━━━━━━╮\n┃   📖 *XLICON COMMAND GUIDE*  ┃\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
-            text += `Type *${p}help <command>* for full details on any command.\n\n`;
-            for (const [cat, cmds] of Object.entries(categories)) {
-                text += `╭─── ${cat} ───\n`;
-                for (const { name, cmd } of cmds) {
-                    const firstLine = cmd.desc.replace(/\n[\s\S]*/,'').slice(0, 70);
-                    text += `┃ *${p}${name}* — ${firstLine}\n`;
-                }
-                text += `╰──────────────────────────\n\n`;
-            }
-            text += `> 🔤 Prefix: *${p}*  |  Warn limit: *${wl} warns = auto-kick*`;
-            return m.reply(text);
+module.exports={name:'help',aliases:['h','howto'],description:'Full command details — .help alone shows all commands, .help <command> shows detailed info',
+async execute(sock,m,args){
+    const p=global.BOT_PREFIX||'.';
+    const wl=process.env.WARN_LIMIT||'3';
+    const commands={
+        ping:{cat:'📊 Status & Info',desc:"Check bot response speed, uptime, RAM, and CPU load in one message.",usage:p+'ping',al:'speed, latency, status'},
+        alive:{cat:'📊 Status & Info',desc:'Confirm the bot is online and responding.',usage:p+'alive',al:'none'},
+        uptime:{cat:'📊 Status & Info',desc:'Show how long the bot has been running since last restart.',usage:p+'uptime',al:'up'},
+        stats:{cat:'📊 Status & Info',desc:'Full bot analytics: total messages tracked, active groups, unique users, AI status, RAM, and MongoDB connection status.',usage:p+'stats',al:'botstats, analytics, dashboard'},
+        menu:{cat:'📊 Status & Info',desc:'Display the full command menu organised by category.',usage:p+'menu',al:'commands, list, cmds'},
+        ai:{cat:'🤖 AI Assistant',desc:'Chat with XLICON AI (powered by Groq/Llama 3 — free). Remembers your conversation for 30 minutes.\n\nGet a FREE key at console.groq.com (no credit card needed), add GROQ_API_KEY to Railway.\n\nSub-commands:\n- '+p+'ai <question> — Ask anything\n- '+p+'ai on — Auto-reply to every message in this chat\n- '+p+'ai off — Stop auto-reply\n- '+p+'aiclear — Reset conversation memory\n\nWorks in personal and group chats.',usage:p+'ai Who is the richest person in Africa?\n'+p+'ai Tell me more about him\n'+p+'ai on\n'+p+'ai off\n'+p+'aiclear',al:'ask, claude, llm, bot'},
+        imagine:{cat:'🤖 AI Assistant',desc:'Generate an AI image from text. Completely free, no API key needed.\n\nStyle prefixes: anime: realistic: cartoon: painting: sketch: watercolor: cinematic: pixel: fantasy: dark:\n\nTips: be descriptive, mention lighting, mood, setting and style for better results.',usage:p+'imagine a golden sunset over Lagos waterfront\n'+p+'imagine anime: cute girl with flowers\n'+p+'imagine realistic: lion in savanna\n'+p+'imagine cinematic: action hero in rain',al:'img, generate, draw, image, paint'},
+        translate:{cat:'🤖 AI Assistant',desc:'Translate any text to any language. Reply to a message or type text directly. Uses AI (Groq) for best quality, falls back to MyMemory free API.\n\nLanguages: english french arabic yoruba igbo hausa spanish portuguese chinese japanese korean russian german italian turkish hindi swahili dutch zulu polish greek hebrew persian',usage:p+'translate arabic Hello how are you?\n'+p+'translate yoruba Good morning\n'+p+'translate french (reply to any message)',al:'tr, trans, lang'},
+        summarize:{cat:'🤖 AI Assistant',desc:'Summarize a long message into 3-6 clear bullet points using AI. Reply to any long message or type text directly. Needs GROQ_API_KEY.',usage:p+'summarize (reply to a long message)',al:'tldr, summary, sum'},
+        grammar:{cat:'🤖 AI Assistant',desc:'Fix grammar and spelling of any text using AI. Shows the corrected version and what was changed. Needs GROQ_API_KEY.',usage:p+'grammar I goes to market yesterday\n'+p+'grammar (reply to a message)',al:'fix, spell, correct, proofread'},
+        anonread:{cat:'👻 Privacy & Stealth',desc:'Toggles ghost mode. When ON, the bot never sends read receipts — others only see grey ticks when they message you. One-way: you can still see blue ticks when others read your messages. Saved to MongoDB, survives restarts.',usage:p+'anonread (toggle ON)\n'+p+'anonread (toggle OFF)',al:'ghostmode, ghost, readanon'},
+        anonview:{cat:'👻 Privacy & Stealth',desc:'Silently caches all status updates from contacts without sending a seen receipt. Files under 15MB saved to MongoDB (survive restarts), larger files kept in memory. Use .statusdl to retrieve them.',usage:p+'anonview (toggle ON/OFF)',al:'sv, statusview, viewstatus'},
+        statusdl:{cat:'👻 Privacy & Stealth',desc:'Download cached statuses from a specific contact. Requires .anonview ON to cache statuses first.\n\nSub-commands:\n- list — See contacts with cached statuses\n- <number> — Get all their cached statuses\n- clear — Delete all cached statuses',usage:p+'statusdl list\n'+p+'statusdl 2348012345678\n'+p+'statusdl clear',al:'getstatus, vstatus'},
+        antidelete:{cat:'👻 Privacy & Stealth',desc:'When ON, every message received is saved to MongoDB. If anyone deletes their message, the original is immediately forwarded to your DM. Covers groups and private chats. Survives restarts.',usage:p+'antidelete (toggle ON/OFF)',al:'ad, nodelete'},
+        spy:{cat:'👻 Privacy & Stealth',desc:'Owner-only. Subscribe to a contact's online/offline status. Get a DM notification the moment they come online or go offline.\n\nSub-commands: add, list, remove',usage:p+'spy add 2348012345678\n'+p+'spy list\n'+p+'spy remove 1',al:'track, online, presence'},
+        crypto:{cat:'🔍 Search & Info',desc:'Get live cryptocurrency price, 24h change, market cap, and 24h volume. No API key needed.\n\nShortcuts: btc, eth, bnb, sol, ada, xrp, doge, matic, shib, ton, trx, link, dot, usdt',usage:p+'crypto BTC\n'+p+'crypto ethereum\n'+p+'crypto solana',al:'coin, price, btc, eth'},
+        movie:{cat:'🔍 Search & Info',desc:'Search for any movie or TV show: rating, cast, director, plot, genre, box office. Needs OMDB_API_KEY (free at omdbapi.com — no credit card).',usage:p+'movie Black Panther\n'+p+'movie Money Heist\n'+p+'movie The Lion King',al:'film, imdb, series, show'},
+        weather:{cat:'🔍 Search & Info',desc:'Get live weather for any city — temperature, humidity, wind, condition.',usage:p+'weather Lagos\n'+p+'weather London UK',al:'w, forecast'},
+        news:{cat:'🔍 Search & Info',desc:'BBC headlines by category.',usage:p+'news\n'+p+'news tech\n'+p+'news africa\n'+p+'news sport',al:'headlines'},
+        github:{cat:'🔍 Search & Info',desc:'Look up any GitHub user — profile, bio, repo count, follower count, top starred repos. No API key needed.',usage:p+'github torvalds\n'+p+'github legacyhood',al:'ghprofile, gituser, gh'},
+        lyrics:{cat:'🔍 Search & Info',desc:'Get song lyrics. Separate artist and title with a dash. No API key needed.',usage:p+'lyrics Wizkid - Essence\n'+p+'lyrics Burna Boy - Last Last\n'+p+'lyrics Davido - Fall',al:'song, lyric'},
+        prayer:{cat:'🔍 Search & Info',desc:'Islamic prayer times for any city. All 5 daily prayers plus sunrise. No API key needed.',usage:p+'prayer Lagos Nigeria\n'+p+'prayer Cairo Egypt\n'+p+'prayer Dubai UAE',al:'salah, namaz, prayertime'},
+        bible:{cat:'📖 Knowledge',desc:'Any Bible verse in the KJV translation. Supports single verses and ranges.\nExample books: John, Psalm, Romans, Genesis, Proverbs, Matthew, Revelation',usage:p+'bible John 3:16\n'+p+'bible Psalm 23:1\n'+p+'bible Proverbs 3:5-6',al:'verse, scripture, kjv'},
+        quran:{cat:'📖 Knowledge',desc:'Any Quran verse with Arabic text and Sahih International English translation. Format: Surah:Ayah',usage:p+'quran 1:1  (Al-Fatiha)\n'+p+'quran 2:255  (Ayatul Kursi)\n'+p+'quran 112:1  (Al-Ikhlas)',al:'surah, ayah, quranverse'},
+        fact:{cat:'📖 Knowledge',desc:'Random interesting fact. If GROQ_API_KEY is set, you can specify a category for topic-specific facts.',usage:p+'fact\n'+p+'fact science\n'+p+'fact history\n'+p+'fact space\n'+p+'fact animals',al:'facts, trivia, funfact'},
+        horoscope:{cat:'📖 Knowledge',desc:'Daily horoscope for any star sign. Signs: aries taurus gemini cancer leo virgo libra scorpio sagittarius capricorn aquarius pisces',usage:p+'horoscope scorpio\n'+p+'horoscope leo\n'+p+'horoscope aquarius',al:'zodiac, star, starsign'},
+        sticker:{cat:'🎨 Media & Stickers',desc:'Convert image or video to WhatsApp sticker. Optionally set pack name and author separated by |.',usage:p+'sticker  (reply to image or video)\n'+p+'sticker MyPack|AuthorName',al:'s, take, stkr'},
+        watermark:{cat:'🎨 Media & Stickers',desc:'Add a text watermark to the bottom-right corner of any image. Reply to an image with this command.',usage:p+'watermark My Name  (reply to image)\n'+p+'watermark XLICON',al:'wm, addtext, stamp'},
+        resize:{cat:'🎨 Media & Stickers',desc:'Resize an image to exact pixel dimensions. Reply to an image with the target size.',usage:p+'resize 800x600  (reply to image)\n'+p+'resize 1080x1080\n'+p+'resize 1280x720',al:'scale, imgsize, dimensions'},
+        document:{cat:'🎨 Media & Stickers',desc:'Get file information from any media message: type, MIME type, file size, dimensions, duration, filename.',usage:p+'document  (reply to any media)',al:'fileinfo, mediainfo'},
+        meme:{cat:'🎨 Media & Stickers',desc:'Fetch a random meme image from Reddit. No API key needed.',usage:p+'meme\n'+p+'meme funny\n'+p+'meme dankmemes',al:'memes, funnyimage, dank'},
+        shorten:{cat:'🎨 Media & Stickers',desc:'Shorten any URL using the is.gd free API. No API key needed.',usage:p+'shorten https://www.example.com/very/long/url',al:'short, tinyurl, bitly'},
+        quiz:{cat:'🎮 Games & Fun',desc:'Random multiple-choice trivia quiz. Reply .A, .B, .C, or .D within 30 seconds to answer.\n\nCategories: general film music science computers math sports geography history animals',usage:p+'quiz\n'+p+'quiz science\n'+p+'quiz geography',al:'trivia, qa'},
+        tictactoe:{cat:'🎮 Games & Fun',desc:'Challenge a group member to Tic-Tac-Toe. Players take turns picking positions 1-9. Type .tt quit to forfeit.\n\nBoard positions:\n1 | 2 | 3\n4 | 5 | 6\n7 | 8 | 9',usage:p+'tictactoe @user  — challenge\n'+p+'tt 5  — pick center\n'+p+'tt quit  — forfeit',al:'ttt, tt, xo'},
+        hangman:{cat:'🎮 Games & Fun',desc:'Classic hangman word game. Guess letters one at a time. 6 wrong guesses before game over.',usage:p+'hangman  — start game\n'+p+'hangman A  — guess a letter\n'+p+'hangman quit  — give up',al:'hm, wordgame'},
+        riddle:{cat:'🎮 Games & Fun',desc:'Get a riddle to solve. Reply .answer to reveal the solution without giving away to others.',usage:p+'riddle  — get a riddle\n'+p+'riddle answer  — reveal solution',al:'puzzle, brainteaser'},
+        roast:{cat:'🎮 Games & Fun',desc:'Send a fun roast from a curated list. For AI-generated custom roasts, use .airoast (needs GROQ_API_KEY).',usage:p+'roast @user\n'+p+'airoast @user  — AI roast',al:'dis, clown, burn, airoast'},
+        todo:{cat:'⏰ Productivity',desc:'Personal to-do list saved per user in MongoDB. Add tasks, mark them done, and track progress.\n\nSub-commands: add, list, done <n>, remove <n>, clear',usage:p+'todo add Buy groceries\n'+p+'todo list\n'+p+'todo done 1\n'+p+'todo remove 2\n'+p+'todo clear',al:'task, tasks, checklist'},
+        note:{cat:'⏰ Productivity',desc:'Save notes in groups (visible to all) or privately (sent to your DM).\n\nSub-commands: add <title> <text>, get <title>, list, delete <title>, clear\nPrivate: .note private add <title> <text>',usage:p+'note add rules Be respectful\n'+p+'note get rules\n'+p+'note list\n'+p+'note private add reminder Call mum',al:'notes, save, memo'},
+        remind:{cat:'⏰ Productivity',desc:'Set a reminder. The bot messages you after the set time. Units: s=seconds, m=minutes, h=hours, d=days.',usage:p+'remind 30m Buy groceries\n'+p+'remind 2h Call doctor\n'+p+'remind 1d Happy birthday check',al:'reminder, remindme, timer'},
+        contact:{cat:'⏰ Productivity',desc:'Generate a WhatsApp contact card (.vcf) from any user. The recipient can tap it to save to their phone contacts.',usage:p+'contact @user\n'+p+'contact  (reply to a message)',al:'vcard, savecontact'},
+        admins:{cat:'👥 Group Admin',desc:'List all group admins. Owners marked separately from regular admins. Your entry marked with 👈 You, bot marked with 🤖.',usage:p+'admins',al:'adminlist, listadmins'},
+        tagall:{cat:'👥 Group Admin',desc:'Mention all group members at once with an optional message above. Admin only.',usage:p+'tagall\n'+p+'tagall Please read the pinned message!',al:'everyone, all, mentionall'},
+        kick:{cat:'👥 Group Admin',desc:'Remove a member from the group. Both you and the bot must be admins. Target by replying or mentioning.',usage:p+'kick @user\n'+p+'kick  (reply to message)',al:'remove, ban'},
+        leaderboard:{cat:'👥 Group Admin',desc:'Show the top 10 most active members by message count. Counts start from when bot was added.\n\nPeriods: all (default), week, month',usage:p+'leaderboard\n'+p+'leaderboard week\n'+p+'leaderboard month',al:'lb, top, rank'},
+        birthday:{cat:'👥 Group Admin',desc:'Track birthdays. Bot auto-wishes at 8am on the birthday. Works in any group the member is in.\n\nSub-commands: set DD/MM, list, remove',usage:p+'birthday set 25/12\n'+p+'birthday list\n'+p+'birthday remove',al:'bday, bd'},
+        report:{cat:'👥 Group Admin',desc:'Report a member to all group admins with an optional reason. A report message is sent tagging all admins.',usage:p+'report @user Posting spam\n'+p+'report  (reply to a message)',al:'flag, reportuser'},
+        antispam:{cat:'🛡️ Group Protection',desc:'Block spam messages. Members who send too many messages too fast get auto-warned and auto-kicked after '+wl+' warnings.',usage:p+'antispam on\n'+p+'antispam off',al:'as, spamprotect'},
+        antilink:{cat:'🛡️ Group Protection',desc:'Block all URLs and WhatsApp group links from non-admins. Detects: http/https, wa.me, t.me, bit.ly, YouTube, and more.',usage:p+'antilink on\n'+p+'antilink off',al:'al, linkprotect, nolink'},
+        antiforward:{cat:'🛡️ Group Protection',desc:'Block forwarded messages from non-admins. Any forwarded message is automatically deleted.',usage:p+'antiforward on\n'+p+'antiforward off',al:'noforward, blockforward'},
+        antifake:{cat:'🛡️ Group Protection',desc:'When a new member joins with no profile picture, they are auto-kicked or warned. Set action to kick or warn.',usage:p+'antifake on\n'+p+'antifake off\n'+p+'antifake kick\n'+p+'antifake warn',al:'nobot, fakedetect'},
+        lock:{cat:'🛡️ Group Protection',desc:'Block specific message types from non-admins.\n\nTypes: media, text, image, video, audio, sticker, doc, link, all, none\n\nSub: list, all, none, <type> on/off',usage:p+'lock image on\n'+p+'lock media on\n'+p+'lock link on\n'+p+'lock list\n'+p+'lock none',al:'lockchat, restrict'},
+        slowmode:{cat:'🛡️ Group Protection',desc:'Enforce a cooldown between messages per member. If a member sends too fast, the message is deleted.',usage:p+'slowmode 30\n'+p+'slowmode 60\n'+p+'slowmode off',al:'slow, cooldown, ratelimit'},
+        warn:{cat:'🛡️ Group Protection',desc:'Issue a warning to a member. After '+wl+' warnings they are auto-kicked and count resets.',usage:p+'warn @user\n'+p+'warn @user Posting inappropriate content',al:'warning'},
+        autopost:{cat:'🤖 Auto Features',desc:'Schedule a message to be sent in this chat at the same time every day. Persists across Railway restarts.\n\nSub-commands: add HH:MM <message>, list, remove <n>, clear',usage:p+'autopost add 07:00 Good morning everyone! ☀️\n'+p+'autopost add 22:00 Good night everyone 🌙\n'+p+'autopost list\n'+p+'autopost remove 1',al:'schedule, autobroadcast'},
+        autoreply:{cat:'🤖 Auto Features',desc:'Set keyword-based auto-replies. When someone sends a matching keyword, bot responds automatically.\n\nSub-commands: add keyword|reply, list, remove <keyword>, clear',usage:p+'autoreply add hi|Hello! How can I help?\n'+p+'autoreply list\n'+p+'autoreply remove hi',al:'ar, autorespond'},
+        blacklist:{cat:'⚙️ Owner Only',desc:'Globally ban a number from using any bot command in any chat. Saved to MongoDB.\n\nSub-commands: add @user, add <number>, remove <number>, list',usage:p+'blacklist add @user\n'+p+'blacklist add 2348012345678\n'+p+'blacklist remove 2348012345678\n'+p+'blacklist list',al:'bl, ban, unban'},
+        maintenance:{cat:'⚙️ Owner Only',desc:'Put the bot into maintenance mode. All non-owner commands are silently ignored. You can set a custom message.\n\nSub-commands: on, off, msg <text>',usage:p+'maintenance on\n'+p+'maintenance off\n'+p+'maintenance on Bot updating, back in 5 mins',al:'maint, offline'},
+        prefix:{cat:'⚙️ Owner Only',desc:'Change the bot command prefix. Change is saved to MongoDB and survives restarts. 1-3 characters max.',usage:p+'prefix !\n'+p+'prefix /\n'+p+'prefix #',al:'setprefix, changeprefix'},
+        backup:{cat:'⚙️ Owner Only',desc:'Export all bot settings (auto-replies, notes, todos, spy list, group settings, etc.) to a JSON file sent to your DM.',usage:p+'backup',al:'export, dumpdb'},
+        setowner:{cat:'⚙️ Owner Only',desc:'Manage bot owner numbers from WhatsApp. Sub-commands: (no args)=show, add <number>, remove <number>, set <number>',usage:p+'setowner\n'+p+'setowner add 2348012345678\n'+p+'setowner remove 2348012345678',al:'owner, addowner'},
+        broadcast:{cat:'⚙️ Owner Only',desc:'Send a message to every group the bot is in. Can broadcast text, images, or videos.',usage:p+'broadcast Hello everyone! 📢\n'+p+'broadcast  (reply to image)\n'+p+'broadcast list',al:'bc, announce'}
+    };
+    if(!args.length){
+        const cats={};
+        for(const[name,cmd] of Object.entries(commands)){if(!cats[cmd.cat])cats[cmd.cat]=[];cats[cmd.cat].push({name,cmd});}
+        let txt='╭━━━━━━━━━━━━━━━━━━━━━━╮\n┃   📖 *XLICON COMMAND GUIDE*  ┃\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n';
+        txt+='Type *'+p+'help <command>* for full details, usage examples and aliases.\n\n';
+        for(const[cat,cmds] of Object.entries(cats)){
+            txt+='╭─── '+cat+' ───\n';
+            for(const{name,cmd}of cmds) txt+='┃ *'+p+name+'* — '+cmd.desc.split('\n')[0].slice(0,68)+'\n';
+            txt+='╰──────────────────────────\n\n';
         }
-
-        const query = args[0].toLowerCase().replace(/^[.\/!]/, '');
-        const cmd = commands[query];
-        if (!cmd) return m.reply(`❌ No help entry for *${p}${query}*\n\nUse *${p}help* to see all commands.`);
-
-        await m.reply(
-`╭━━━━━━━━━━━━━━━━━━━━━━╮
-┃   📖 *COMMAND DETAILS*   ┃
-╰━━━━━━━━━━━━━━━━━━━━━━╯
-
-🔹 *Command:* ${p}${query}
-🏷️ *Category:* ${cmd.category}
-
-📝 *Description:*
-${cmd.desc}
-
-📌 *Usage:*
-${cmd.usage}
-
-🔁 *Aliases:* ${cmd.aliases}`
-        );
+        txt+='> 🔤 Prefix: *'+p+'*  |  Warn limit: *'+wl+' warns = auto-kick*\n> Total commands: *'+Object.keys(commands).length+'*';
+        return m.reply(txt);
     }
-};
+    const query=args[0].toLowerCase().replace(/^[.\/!]/,'');
+    const aliasMap={};
+    for(const[name,cmd]of Object.entries(commands)){
+        (cmd.al||'').split(',').map(a=>a.trim()).filter(Boolean).forEach(a=>aliasMap[a]=name);
+    }
+    const key=commands[query]?query:aliasMap[query];
+    if(!key) return m.reply('❌ No help entry for *'+p+query+'*\n\nUse *'+p+'help* to see all available commands.');
+    const cmd=commands[key];
+    await m.reply('╭━━━━━━━━━━━━━━━━━━━━━━╮\n┃   📖 *COMMAND DETAILS*   ┃\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n🔹 *Command:* '+p+key+'\n🏷️ *Category:* '+cmd.cat+'\n\n📝 *Description:*\n'+cmd.desc+'\n\n📌 *Usage:*\n'+cmd.usage+'\n\n🔁 *Aliases:* '+cmd.al);
+}};
