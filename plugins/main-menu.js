@@ -155,6 +155,8 @@ async execute(sock,m){
 ┃ ${p}backup — Export all settings to DM
 ┃ ${p}stats — Full bot analytics
 ┃ ${p}broadcast <msg> — Send to all groups
+┃ ${p}broadcast (reply) — Broadcast quoted msg
+┃ ${p}broadcast list — Show all groups
 ┃ ${p}spy add/list/remove — Online tracking
 ╰──────────────────────────
 
