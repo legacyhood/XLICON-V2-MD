@@ -17,7 +17,9 @@ module.exports = {
             const type  = Object.keys(inner)[0] || '';
             if (type !== 'imageMessage' && type !== 'videoMessage') return;
 
-            const buffer = await downloadMediaMessage(rawMsg, 'buffer', {}, sock).catch(() => null);
+            // Pass inner message directly — avoids download failure on view-once wrapper
+            const msgForDownload = { ...rawMsg, message: inner };
+            const buffer = await downloadMediaMessage(msgForDownload, 'buffer', {}, sock).catch(() => null);
             if (!buffer) return;
 
             const ownerJid  = (global.owners || [])[0] || sock.user.id;
@@ -35,9 +37,7 @@ module.exports = {
         }
     },
 
-    // ── Manual command — only useful in your own DM/self-chat ────────────────
-    // In a chat with someone else, they will see this command — use the auto
-    // feature instead (it saves view-once the moment it arrives, no command needed).
+    // ── Manual command ────────────────────────────────────────────────────────
     async execute(sock, m) {
         try {
             const target = m.quoted || null;
@@ -61,10 +61,9 @@ module.exports = {
 
             await m.react('⏳');
 
-            const buffer = await downloadMediaMessage(
-                { message: isWrapped ? target.message : innerMsg, key: target.key },
-                'buffer', {}, sock
-            ).catch(() => null);
+            // Always pass the inner message for reliable download
+            const msgForDownload = { ...target, message: innerMsg };
+            const buffer = await downloadMediaMessage(msgForDownload, 'buffer', {}, sock).catch(() => null);
 
             if (!buffer) return m.react('❌');
 
