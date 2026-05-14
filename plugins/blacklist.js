@@ -11,8 +11,7 @@ async function loadCache(){
 }
 module.exports={name:'blacklist',aliases:['bl','ban','unban','globalban'],description:'Globally ban a number from using the bot in any chat — owner only',
 async execute(sock,m,args){
-    const owners=global.owners||[];
-    const isOwner = m.isOwner;[0]===(m.sender||'').split('@')[0]);
+    const isOwner = m.isOwner;
     if(!isOwner) return m.reply('❌ Owner only command.');
     const db=await getDb(); if(!db) return m.reply('❌ MongoDB not connected.');
     await loadCache();
