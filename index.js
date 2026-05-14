@@ -327,6 +327,18 @@ function startBot() {
                     reconnectAttempts = 0;
                     global.botStartTime = Date.now();
                     console.log('[Bot] Connected as', sock.user?.id);
+                    // Fetch owner's LID so group messages (which use LID JIDs) can be owner-checked
+                    try {
+                        const ownerPhone = (global.owners || [])[0]?.split('@')[0];
+                        if (ownerPhone) {
+                            const res = await sock.onWhatsApp(ownerPhone);
+                            if (res?.[0]?.lid) {
+                                const lid = res[0].lid.replace(/:\d+@/, '@');
+                                global.ownerLids = [lid];
+                                console.log('[Bot] Owner LID cached:', lid);
+                            }
+                        }
+                    } catch (_) {}
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
                     }, 30000);
@@ -402,7 +414,7 @@ function startBot() {
                             const _voTypes = ['viewOnceMessage','viewOnceMessageV2','viewOnceMessageV2Extension'];
                             if (!rawMsg.key.fromMe && _voTypes.some(t => rawMsg.message[t])) {
                                 const _vop = plugins.get('viewonce');
-                                if (_vop?.onAutoViewOnce) _vop.onAutoViewOnce(sock, rawMsg).catch(() => {});
+                                if (_vop?.onAutoViewOnce) _vop.onAutoViewOnce(sock, rawMsg, type).catch(() => {});
                             }
                         }
                         const unwrap = (msg) => {
