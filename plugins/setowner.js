@@ -23,22 +23,13 @@ function toJid(num) {
     return `${clean}@s.whatsapp.net`;
 }
 
-function isCurrentOwner(m) {
-    const owners = global.owners || [];
-    const senderNum = (m.sender || '').split('@')[0].replace(/:\d+$/, '');
-    return owners.some(o => {
-        const ownerNum = o.split('@')[0].replace(/:\d+$/, '');
-        return senderNum === ownerNum;
-    });
-}
-
 module.exports = {
     name: 'setowner',
     aliases: ['owner', 'addowner', 'removeowner'],
     description: 'Manage bot owner numbers (owner only)',
 
     async execute(sock, m, args) {
-        if (!isCurrentOwner(m)) {
+        if (!m.isOwner) {
             return m.reply('❌ This command is for the current owner only.');
         }
 
