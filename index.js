@@ -112,7 +112,10 @@ async function loadStatusCacheFromMongo() {
     try {
         const db = await getMongoDb();
         if (!db) return;
-        const docs = await db.collection('status_cache').find({}).toArray();
+        const docs = await Promise.race([
+            db.collection('status_cache').find({}).toArray(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('status_cache query timed out after 5s')), 5000))
+        ]);
         global.statusCache = global.statusCache || new Map();
         for (const doc of docs) {
             const entries = (doc.entries || []).map(e => ({
@@ -182,7 +185,10 @@ function restoreSessionSync() {
 // ── Load MongoDB session async (always preferred over SESSION_ID env var) ─────
 async function restoreSessionFromMongo() {
     if (fs.existsSync(__dirname + '/session/creds.json')) return;
-    const sessionJson = await loadSessionFromMongo();
+    const sessionJson = await Promise.race([
+        loadSessionFromMongo(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('session load timed out after 6s')), 6000))
+    ]).catch(e => { console.warn('[MongoDB] restoreSessionFromMongo:', e.message); return null; });
     if (!sessionJson) return;
     try {
         fs.mkdirSync(__dirname + '/session', { recursive: true });
