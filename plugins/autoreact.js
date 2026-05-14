@@ -12,7 +12,7 @@ module.exports = {
             if (!m.body) return;
             const owners = global.owners || [];
             const senderNum = (m.sender || '').split('@')[0].replace(/:\d+$/, '');
-            const isOwner = owners.some(o => o.split('@')[0].replace(/:\d+$/, '') === senderNum);
+            const isOwner = m.isOwner;[0].replace(/:\d+$/, '') === senderNum);
             if (isOwner) await m.react('✨');
         } catch (_) {}
     }
