@@ -1,5 +1,4 @@
-let _db=null;
-async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
+const getDb = () => global.getMongoDb();
 module.exports={name:'prefix',aliases:['setprefix','changeprefix','botprefix'],description:'Change the bot command prefix without touching Railway — owner only',
 async execute(sock,m,args){
     const isOwner = m.isOwner;
