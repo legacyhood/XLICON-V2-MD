@@ -10,9 +10,7 @@ module.exports = {
     async onMessage(sock, m) {
         try {
             if (!m.body) return;
-            const owners = global.owners || [];
-            const senderNum = (m.sender || '').split('@')[0].replace(/:\d+$/, '');
-            const isOwner = m.isOwner;[0].replace(/:\d+$/, '') === senderNum);
+            const isOwner = m.isOwner;
             if (isOwner) await m.react('✨');
         } catch (_) {}
     }
