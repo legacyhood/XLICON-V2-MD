@@ -1,3 +1,4 @@
+// deploy: 2026-05-14T17:32:50.901Z
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, generateWAMessageFromContent, fetchLatestWaWebVersion, fetchLatestBaileysVersion, proto } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
