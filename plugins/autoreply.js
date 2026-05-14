@@ -7,7 +7,6 @@ async function getDb() {
     if (_db) return _db;
     if (!process.env.MONGO_URI) return null;
     try {
-        const { MongoClient } = require('mongodb');
         const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 3000 });
         await c.connect(); _db = c.db('xlicon_bot'); return _db;
     } catch(e) { return null; }
