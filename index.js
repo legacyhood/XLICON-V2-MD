@@ -22,6 +22,7 @@ let latestQR = '';
 let botStatus = 'disconnected';
 let presenceInterval = null;
 let sock = null;
+let reconnectAttempts = 0;
 
 // ── In-memory message store (fixes "Waiting for this message") ──────────────
 const msgStore = new Map();
@@ -126,7 +127,6 @@ async function clearSession() {
 
 function startBot() {
     console.log('[Bot] Starting...');
-    let reconnectAttempts = 0;
     if (!fs.existsSync(AUTH_FOLDER)) fs.mkdirSync(AUTH_FOLDER, { recursive: true });
 
     (async () => {
@@ -178,6 +178,7 @@ function startBot() {
                     }
                 } else if (connection === 'open') {
                     botStatus = 'connected';
+                    reconnectAttempts = 0;
                     console.log('[Bot] Connected as', sock.user?.id);
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
