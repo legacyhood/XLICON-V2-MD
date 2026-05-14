@@ -4,21 +4,27 @@
   "description": "Xlicon WhatsApp Bot",
   "main": "index.js",
   "type": "commonjs",
-  "scripts": { "start": "node index.js", "bot": "node index.js" },
+  "scripts": {
+    "start": "node index.js",
+    "bot": "node index.js"
+  },
   "author": "XLICON_MD_V2",
   "license": "MIT",
   "private": true,
-  "keywords": ["whatsapp-bot","baileys","xlicon"],
+  "keywords": [
+    "whatsapp-bot",
+    "baileys",
+    "xlicon"
+  ],
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@hapi/boom": "^10.0.1",
-    "@whiskeysockets/baileys": "npm:gifted-baileys@2.0.0",
+    "@whiskeysockets/baileys": "6.7.21",
     "axios": "^1.6.8",
     "body-parser": "*",
     "dotenv": "^17.2.3",
     "express": "*",
     "fs": "*",
-    "gifted-btns": "^1.0.0",
     "mongodb": "^6.0.0",
     "node-fetch": "^2.7.0",
     "os": "^0.1.2",
