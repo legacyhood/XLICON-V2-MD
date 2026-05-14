@@ -50,42 +50,61 @@ function storeMsg(msg) {
     if (msgStore.size > 1000) msgStore.delete(msgStore.keys().next().value);
 }
 
-// ── MongoDB session ──────────────────────────────────────────────────────────
-async function saveSessionToMongo(bundle) {
-    if (!process.env.MONGO_URI) return;
-    try {
+// ── MongoDB singleton connection ─────────────────────────────────────────────
+let _mongoClient = null;
+let _mongoConnecting = null;
+
+async function getMongoDb() {
+    if (!process.env.MONGO_URI) return null;
+    if (_mongoClient) {
+        // ping to check if still alive
+        try { await _mongoClient.db('admin').command({ ping: 1 }); return _mongoClient.db('xlicon_bot'); } catch (_) { _mongoClient = null; }
+    }
+    if (_mongoConnecting) return _mongoConnecting;
+    _mongoConnecting = (async () => {
         const { MongoClient } = require('mongodb');
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
+        const c = new MongoClient(process.env.MONGO_URI, {
+            serverSelectionTimeoutMS: 10000,
+            connectTimeoutMS: 10000,
+            socketTimeoutMS: 30000,
+            maxPoolSize: 5
+        });
         await c.connect();
-        await c.db('xlicon_bot').collection('sessions').replaceOne(
+        _mongoClient = c;
+        _mongoConnecting = null;
+        console.log('[MongoDB] Connected (singleton)');
+        return c.db('xlicon_bot');
+    })();
+    const db = await _mongoConnecting;
+    return db;
+}
+
+async function saveSessionToMongo(bundle) {
+    try {
+        const db = await getMongoDb();
+        if (!db) return;
+        await db.collection('sessions').replaceOne(
             { _id: 'main_session' },
             { _id: 'main_session', session: bundle, updatedAt: new Date() },
             { upsert: true }
         );
-        await c.close();
-    } catch (e) { console.error('[MongoDB] Session save failed:', e.message); }
+    } catch (e) { console.error('[MongoDB] Session save failed:', e.message); _mongoClient = null; }
 }
 
 async function loadSessionFromMongo() {
-    if (!process.env.MONGO_URI) return null;
     try {
-        const { MongoClient } = require('mongodb');
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
-        await c.connect();
-        const doc = await c.db('xlicon_bot').collection('sessions').findOne({ _id: 'main_session' });
-        await c.close();
+        const db = await getMongoDb();
+        if (!db) return null;
+        const doc = await db.collection('sessions').findOne({ _id: 'main_session' });
         return doc?.session || null;
-    } catch (e) { console.error('[MongoDB] Session load failed:', e.message); return null; }
+    } catch (e) { console.error('[MongoDB] Session load failed:', e.message); _mongoClient = null; return null; }
 }
 
 async function loadStatusCacheFromMongo() {
-    if (!process.env.MONGO_URI) return;
     try {
-        const { MongoClient } = require('mongodb');
-        const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
-        await c.connect();
-        const docs = await c.db('xlicon_bot').collection('status_cache').find({}).toArray();
-        await c.close();
+        const db = await getMongoDb();
+        if (!db) return;
+        const docs = await db.collection('status_cache').find({}).toArray();
         global.statusCache = global.statusCache || new Map();
         for (const doc of docs) {
             const entries = (doc.entries || []).map(e => ({
@@ -175,16 +194,13 @@ async function restoreSessionFromMongo() {
 
 async function clearSession() {
     try { fs.rmSync(AUTH_FOLDER, { recursive: true, force: true }); } catch(_) {}
-    if (process.env.MONGO_URI) {
-        try {
-            const { MongoClient } = require('mongodb');
-            const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
-            await c.connect();
-            await c.db('xlicon_bot').collection('sessions').deleteOne({ _id: 'main_session' });
-            await c.close();
+    try {
+        const db = await getMongoDb();
+        if (db) {
+            await db.collection('sessions').deleteOne({ _id: 'main_session' });
             console.log('[Session] Cleared from MongoDB');
-        } catch(e) { console.error('[Session] MongoDB clear failed:', e.message); }
-    }
+        }
+    } catch(e) { console.error('[Session] MongoDB clear failed:', e.message); }
 }
 
 function startBot() {
@@ -403,18 +419,12 @@ const server = http.createServer((req, res) => {
         }, 500);
     } else if (req.url === '/api/cleardb' && req.method === 'POST') {
         res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        if (!process.env.MONGO_URI) {
-            res.end(JSON.stringify({ ok: false, error: 'MONGO_URI not set' }));
-        } else {
-            (async () => {
+        (async () => {
                 try {
-                    const { MongoClient } = require('mongodb');
-                    const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 10000, connectTimeoutMS: 10000, socketTimeoutMS: 10000 });
-                    await c.connect();
-                    const db = c.db('xlicon_bot');
+                    const db = await getMongoDb();
+                    if (!db) throw new Error('MongoDB not connected');
                     const cacheResult = await db.collection('status_cache').deleteMany({});
                     const stats = await db.stats();
-                    await c.close();
                     console.log('[MongoDB] Cleared status_cache:', cacheResult.deletedCount, 'docs');
                     res.end(JSON.stringify({ ok: true, deletedStatusCache: cacheResult.deletedCount, dbSizeMB: (stats.dataSize / 1024 / 1024).toFixed(2) }));
                 } catch (e) {
@@ -422,7 +432,6 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ ok: false, error: e.message }));
                 }
             })();
-        }
     } else if (req.url === '/api/session') {
         const cp = path.join(__dirname, 'session', 'creds.json');
         if (fs.existsSync(cp)) {
