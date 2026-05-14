@@ -471,6 +471,18 @@ function startBot() {
                             }
                             continue;
                         }
+                        // ── `> code` exec — must be before fromMe guard ──────────────────────
+                        // In MD bots every owner message has fromMe=true so onMessage never fires.
+                        if (m.body?.startsWith('>') && m.isOwner) {
+                            const ep = plugins.get('exec');
+                            if (ep?.execute) {
+                                const code = m.body.slice(1).trim();
+                                try { await ep.execute(sock, m, [code]); } catch(e) {
+                                    try { await m.send('❌ ' + e.message); } catch(_){}
+                                }
+                            }
+                            continue;
+                        }
                         if (rawMsg.key?.fromMe) continue;
                         for (const plugin of new Set(plugins.values())) {
                             if (typeof plugin.onMessage !== 'function') continue;
