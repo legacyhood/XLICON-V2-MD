@@ -4,7 +4,7 @@ let db = null;
 async function getDb() {
     if (db) return db;
     if (!process.env.MONGO_URI) return null;
-    try { mongoClient = new MongoClient(process.env.MONGO_URI); await mongoClient.connect(); db = mongoClient.db('xlicon_bot'); return db; }
+    try { mongoClient = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000, connectTimeoutMS: 5000 }); await mongoClient.connect(); db = mongoClient.db('xlicon_bot'); return db; }
     catch (e) { return null; }
 }
 module.exports = {
