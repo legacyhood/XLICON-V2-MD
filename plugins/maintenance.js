@@ -1,11 +1,9 @@
-let _db=null;
-async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
+const getDb = () => global.getMongoDb();
 let maintenanceMode=false;
 let maintenanceMsg='🔧 Bot is currently under maintenance. Please try again later.';
 module.exports={name:'maintenance',aliases:['maint','offline','botmaintenance'],description:'Put the bot into maintenance mode — ignores all non-owner commands — owner only',
 async execute(sock,m,args){
-    const owners=global.owners||[];
-    const isOwner = m.isOwner;[0]===(m.sender||'').split('@')[0]);
+    const isOwner = m.isOwner;
     if(!isOwner) return m.reply('❌ Owner only command.');
     const sub=(args[0]||'').toLowerCase();
     if(sub==='on'){
