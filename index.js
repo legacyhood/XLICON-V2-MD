@@ -24,6 +24,7 @@ const LOG_BUFFER = [];
 const LOG_MAX = 600;
 function pushLog(level, args) {
     const line = args.map(a => (typeof a === 'string' ? a : require('util').inspect(a, { depth: 2 }))).join(' ');
+    if (line.startsWith('Closing session: SessionEntry') || line.startsWith('session closed')) return;
     LOG_BUFFER.push({ t: Date.now(), level, line });
     if (LOG_BUFFER.length > LOG_MAX) LOG_BUFFER.shift();
 }
@@ -78,6 +79,13 @@ async function getMongoDb() {
     const db = await _mongoConnecting;
     return db;
 }
+
+// Keep MongoDB connection alive — Atlas closes idle sockets after ~60s
+setInterval(async () => {
+    if (!_mongoClient) return;
+    try { await _mongoClient.db('admin').command({ ping: 1 }); }
+    catch (e) { console.warn('[MongoDB] Keepalive ping failed, will reconnect on next use:', e.message); _mongoClient = null; }
+}, 45000);
 
 async function saveSessionToMongo(bundle) {
     try {
