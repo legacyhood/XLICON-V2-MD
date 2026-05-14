@@ -1,5 +1,4 @@
-let _db=null;
-async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
+const getDb = () => global.getMongoDb();
 const cache=new Map();
 async function isOn(jid){if(cache.has(jid))return cache.get(jid);const db=await getDb();const v=db?(await db.collection('group_settings').findOne({_id:jid}))?.antiforward===true:false;cache.set(jid,v);return v;}
 async function setOn(jid,val){cache.set(jid,val);const db=await getDb();if(db)await db.collection('group_settings').updateOne({_id:jid},{$set:{antiforward:val}},{upsert:true});}
