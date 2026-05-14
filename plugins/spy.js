@@ -1,13 +1,9 @@
-let _db=null;
-async function getDb(){if(_db)return _db;if(!process.env.MONGO_URI)return null;try{const{MongoClient}=require('mongodb');const c=new MongoClient(process.env.MONGO_URI,{serverSelectionTimeoutMS:5000});await c.connect();_db=c.db('xlicon_bot');return _db;}catch(e){return null;}}
 const presenceStates=new Map();
 module.exports={name:'spy',aliases:['track','online','presence'],description:'Get notified in your DM when a specific contact comes online or goes offline',
 async execute(sock,m,args){
-    const db=await getDb(); if(!db) return m.reply('❌ MongoDB not connected.');
+    const db=await global.getMongoDb(); if(!db) return m.reply('❌ MongoDB not connected.');
     const sub=(args[0]||'').toLowerCase();
-    const owners=global.owners||[];
-    const isOwner=owners.some(o=>o.split('@')[0]===(m.sender||'').split('@')[0]);
-    if(!isOwner) return m.reply('❌ Owner only command.');
+    if(!m.isOwner) return m.reply('❌ Owner only command.');
     if(sub==='list'){
         const list=await db.collection('spy_list').find({spierJid:m.sender}).toArray();
         if(!list.length) return m.reply('📋 Not spying on anyone.\nAdd: .spy add 2348XXXXXXXXX');
@@ -30,7 +26,7 @@ async execute(sock,m,args){
     m.reply('╭━━━ 👁️ SPY MODE ━━━╮\n\nGet notified when contacts go online/offline.\n\n.spy add 2348XXXXXXXXX — Track a number\n.spy list — View tracked contacts\n.spy remove <n> — Stop tracking\n\n⚠️ Owner only');
 },
 async onPresenceUpdate(sock,{id,presences}){
-    const db=await getDb(); if(!db) return;
+    const db=await global.getMongoDb(); if(!db) return;
     for(const[jid,presence] of Object.entries(presences)){
         const prev=presenceStates.get(jid);
         const curr=presence.lastKnownPresence;
@@ -46,7 +42,7 @@ async onPresenceUpdate(sock,{id,presences}){
     }
 },
 async onStart(sock){
-    const db=await getDb(); if(!db) return;
+    const db=await global.getMongoDb(); if(!db) return;
     const all=await db.collection('spy_list').find({}).toArray();
     for(const s of all) await sock.presenceSubscribe(s.targetJid).catch(()=>{});
 }};
