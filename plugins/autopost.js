@@ -21,8 +21,7 @@ function startJob(sock,post){
 module.exports={name:'autopost',aliases:['schedule','schedulepost','autobroadcast'],description:'Schedule a message to be posted automatically every day at a set time',
 async execute(sock,m,args){
     const db=await getDb(); if(!db) return m.reply('❌ MongoDB not connected.');
-    const owners=global.owners||[];
-    const isOwner = m.isOwner;[0]===(m.sender||'').split('@')[0]);
+    const isOwner = m.isOwner;
     if(!isOwner&&!m.isAdmin) return m.reply('❌ Owner or group admin only.');
     const sub=(args[0]||'').toLowerCase();
     if(sub==='add'||sub==='set'){
