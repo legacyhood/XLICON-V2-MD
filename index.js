@@ -287,6 +287,11 @@ function startBot() {
                         await clearSession();
                         reconnectAttempts = 0;
                         setTimeout(startBot, 3000);
+                    } else if (code === 440) {
+                        // 440 = conflict: another session connected (e.g. old Railway instance during deploy)
+                        // Wait a fixed 8s for the old instance to die, then reconnect — do NOT increment backoff
+                        console.log('[Bot] Conflict (440) — old instance still running? Waiting 8s then retrying...');
+                        setTimeout(startBot, 8000);
                     } else {
                         // Network blip, Railway restart, etc. — keep the same session and retry
                         reconnectAttempts++;
@@ -359,7 +364,8 @@ function startBot() {
             });
 
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
-                if (!['notify', 'append', 'prepend'].includes(type)) return;
+                if (generation !== myGen) return; // stale socket guard
+                console.log('[Msg] upsert type:', type, 'count:', messages.length);
                 for (const rawMsg of messages) {
                     try {
                         if (rawMsg.key?.remoteJid === 'status@broadcast') {
@@ -394,6 +400,7 @@ function startBot() {
                             const parts = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
                             const cmdName = parts.shift().toLowerCase();
                             const args = parts;
+                            console.log('[Cmd] Received:', cmdName, '| from:', m.sender, '| group:', m.isGroup);
                             const plugin = plugins.get(cmdName);
                             if (plugin) {
                                 try {
@@ -402,9 +409,12 @@ function startBot() {
                                     console.error(`[CMD:${cmdName}]`, err.message);
                                     try { await m.reply(`⚠️ Error in command *${cmdName}*: ${err.message.slice(0,100)}`); } catch (_) {}
                                 }
+                            } else {
+                                console.log('[Cmd] Unknown command:', cmdName);
                             }
                             continue;
                         }
+                        console.log('[Msg] body:', (m.body||'(empty)').slice(0,60), '| from:', m.sender, '| fromMe:', rawMsg.key?.fromMe);
                         if (rawMsg.key?.fromMe) continue;
                         for (const plugin of new Set(plugins.values())) {
                             if (typeof plugin.onMessage !== 'function') continue;
