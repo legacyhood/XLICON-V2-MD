@@ -1,23 +1,19 @@
 module.exports = {
     name: 'autoreact',
-    description: 'Auto-reacts to messages from owners',
+    aliases: ['react'],
+    description: 'Auto-reacts with ✨ to every message sent by the bot owner',
 
-    async execute() {},
+    async execute(sock, m) {
+        return m.reply('ℹ️ Auto-react runs automatically on every owner message. No setup needed.');
+    },
 
     async onMessage(sock, m) {
         try {
             if (!m.body) return;
-
-            const owners = [
-                '25770239992037@lid',
-                '233533763772@s.whatsapp.net'
-            ];
-
-            if (owners.includes(m.sender)) {
-                await m.react('✨');
-            }
-        } catch (err) {
-            console.error('❌ Auto-react error:', err);
-        }
+            const owners = global.owners || [];
+            const senderNum = (m.sender || '').split('@')[0].replace(/:\d+$/, '');
+            const isOwner = owners.some(o => o.split('@')[0].replace(/:\d+$/, '') === senderNum);
+            if (isOwner) await m.react('✨');
+        } catch (_) {}
     }
 };
