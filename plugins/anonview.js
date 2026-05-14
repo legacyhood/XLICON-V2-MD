@@ -1,30 +1,62 @@
 /**
- * Anonymous Status Viewer + Cache (hybrid: MongoDB + in-memory fallback)
- * When ON: statuses cached silently — small files to MongoDB, large files in memory.
- * Use .statusdl <number> to retrieve cached statuses on demand.
+ * Anonymous Status Viewer — persists enabled state to MongoDB across restarts.
  */
 
-global.statusCache = global.statusCache || new Map();
-
-const MONGO_SIZE_LIMIT = 15 * 1024 * 1024; // 15MB — safe under MongoDB's 16MB BSON doc limit
-
-async function saveToMongo(senderJid, entries) {
-    if (!process.env.MONGO_URI) return false;
+let _db = null;
+async function getDb() {
+    if (_db) return _db;
+    if (!process.env.MONGO_URI) return null;
     try {
         const { MongoClient } = require('mongodb');
         const c = new MongoClient(process.env.MONGO_URI, { serverSelectionTimeoutMS: 5000 });
         await c.connect();
-        await c.db('xlicon_bot').collection('status_cache').replaceOne(
+        _db = c.db('xlicon_bot');
+        return _db;
+    } catch (e) { return null; }
+}
+
+global.statusCache = global.statusCache || new Map();
+const MONGO_SIZE_LIMIT = 15 * 1024 * 1024;
+
+let _loaded = false;
+let _enabled = false;
+
+async function loadState() {
+    if (_loaded) return _enabled;
+    const db = await getDb();
+    if (db) {
+        const doc = await db.collection('bot_settings').findOne({ _id: 'anonview' });
+        _enabled = doc?.value === true;
+    }
+    _loaded = true;
+    return _enabled;
+}
+
+async function saveState(val) {
+    _enabled = val;
+    const db = await getDb();
+    if (db) {
+        await db.collection('bot_settings').updateOne(
+            { _id: 'anonview' },
+            { $set: { value: val, updatedAt: new Date() } },
+            { upsert: true }
+        );
+    }
+}
+
+// Auto-load on startup
+loadState().catch(() => {});
+
+async function saveStatusToMongo(senderJid, entries) {
+    const db = await getDb();
+    if (!db) return;
+    try {
+        await db.collection('status_cache').replaceOne(
             { _id: senderJid },
             { _id: senderJid, entries, updatedAt: new Date() },
             { upsert: true }
         );
-        await c.close();
-        return true;
-    } catch (e) {
-        console.error('[anonview] MongoDB save error:', e.message);
-        return false;
-    }
+    } catch (e) {}
 }
 
 function isOwner(m) {
@@ -37,15 +69,16 @@ module.exports = {
     name: 'anonview',
     aliases: ['sv', 'statusview', 'viewstatus'],
     description: 'Toggle anonymous status caching (MongoDB + in-memory hybrid)',
-    enabled: false,
 
     async execute(sock, m) {
         if (!isOwner(m)) return m.reply('❌ This command is for the owner only.');
 
-        this.enabled = !this.enabled;
-        const state = this.enabled ? '✅ *ON*' : '❌ *OFF*';
+        const current = await loadState();
+        await saveState(!current);
+        const on = !current;
+        const state = on ? '✅ *ON*' : '❌ *OFF*';
         const mongo = process.env.MONGO_URI
-            ? '☁️ MongoDB (files ≤15MB) + memory fallback (larger files)'
+            ? '☁️ MongoDB (files ≤15MB) + memory fallback'
             : '⚠️ In-memory only (no MONGO_URI set)';
 
         return m.reply(
@@ -55,23 +88,17 @@ module.exports = {
 
 Status: ${state}
 Storage: ${mongo}
+💾 Saved — survives restarts
 
-${this.enabled
-? `• Statuses cached silently as contacts post them
-• *No seen receipt* ever sent to the poster
-• Files ≤15MB → saved to MongoDB (survives restarts)
-• Files >15MB → kept in memory until next restart
-• Use *.statusdl list* to see who has cached statuses
-• Use *.statusdl <number>* to get a specific person's statuses
-• Run *.anonview* again to turn OFF`
-: `• Status caching stopped
-• Already-cached statuses are still saved
-• Run *.anonview* again to turn back ON`}`
+${on
+? '• Statuses cached silently as contacts post them\n• No seen receipt ever sent\n• Files ≤15MB → MongoDB (survives restarts)\n• Files >15MB → memory only\n• Use .statusdl list to see cached statuses\n• Run .anonview again to turn OFF'
+: '• Status caching stopped\n• Already-cached statuses are still saved\n• Run .anonview again to turn back ON'}`
         );
     },
 
     async onStatus(sock, rawMsg) {
-        if (!this.enabled) return;
+        const on = await loadState();
+        if (!on) return;
         if (!rawMsg.message) return;
         if (rawMsg.key.fromMe) return;
 
@@ -89,16 +116,13 @@ ${this.enabled
                 const buffer = await downloadMediaMessage(rawMsg, 'buffer', {}, sock).catch(() => null);
                 if (!buffer) return;
                 entry = { type: 'image', buffer, caption: rawMsg.message.imageMessage?.caption || '', pushName, ts };
-
             } else if (type === 'videoMessage') {
                 const buffer = await downloadMediaMessage(rawMsg, 'buffer', {}, sock).catch(() => null);
                 if (!buffer) return;
                 entry = { type: 'video', buffer, caption: rawMsg.message.videoMessage?.caption || '', pushName, ts };
-
             } else if (type === 'conversation' || type === 'extendedTextMessage') {
                 const text = rawMsg.message?.conversation || rawMsg.message?.extendedTextMessage?.text || '';
                 entry = { type: 'text', text, pushName, ts };
-
             } else if (type === 'audioMessage') {
                 const buffer = await downloadMediaMessage(rawMsg, 'buffer', {}, sock).catch(() => null);
                 if (!buffer) return;
@@ -107,23 +131,15 @@ ${this.enabled
 
             if (!entry) return;
 
-            // ── Always store in memory ────────────────────────────────────
             const existing = global.statusCache.get(senderJid) || [];
             existing.push(entry);
             if (existing.length > 20) existing.shift();
             global.statusCache.set(senderJid, existing);
 
-            // ── Persist to MongoDB only if within size limit ──────────────
             const bufSize = entry.buffer ? entry.buffer.length : 0;
             if (bufSize <= MONGO_SIZE_LIMIT) {
-                saveToMongo(senderJid, existing).catch(() => {});
-            } else {
-                
+                saveStatusToMongo(senderJid, existing).catch(() => {});
             }
-
-            // DO NOT call sock.readMessages() — that sends a seen receipt
-        } catch (err) {
-            console.error('[AnonView] Cache error:', err.message);
-        }
+        } catch (err) {}
     }
 };
