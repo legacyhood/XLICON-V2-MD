@@ -1,4 +1,3 @@
-const { MongoClient } = require('mongodb');
 let _db = null;
 async function getDb() {
     if (_db) return _db;
