@@ -1,4 +1,3 @@
-const { MongoClient } = require('mongodb');
 const WARN_LIMIT = parseInt(process.env.WARN_LIMIT || '3', 10);
 const filterCache = new Map();
 const CACHE_TTL = 60000;
