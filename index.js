@@ -17,6 +17,21 @@ global.ANON_READ = false;
 const AUTH_FOLDER = './session';
 const PLUGIN_FOLDER = './plugins';
 const PORT = process.env.PORT || 3000;
+// ── Live log capture ─────────────────────────────────────────────────────────
+const LOG_BUFFER = [];
+const LOG_MAX = 600;
+function pushLog(level, args) {
+    const line = args.map(a => (typeof a === 'string' ? a : require('util').inspect(a, { depth: 2 }))).join(' ');
+    LOG_BUFFER.push({ t: Date.now(), level, line });
+    if (LOG_BUFFER.length > LOG_MAX) LOG_BUFFER.shift();
+}
+const _clog = console.log.bind(console);
+const _cerr = console.error.bind(console);
+const _cwarn = console.warn.bind(console);
+console.log   = (...a) => { pushLog('info',  a); _clog(...a); };
+console.error = (...a) => { pushLog('error', a); _cerr(...a); };
+console.warn  = (...a) => { pushLog('warn',  a); _cwarn(...a); };
+
 
 let latestQR = '';
 let botStatus = 'disconnected';
@@ -355,6 +370,15 @@ const server = http.createServer((req, res) => {
         } else {
             res.writeHead(404); res.end(JSON.stringify({ error: 'No session yet' }));
         }
+    } else if (req.url.startsWith('/api/logs')) {
+        const params = new URL(req.url, 'http://localhost').searchParams;
+        const since = parseInt(params.get('since') || '0', 10);
+        const entries = since ? LOG_BUFFER.filter(e => e.t > since) : LOG_BUFFER;
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ logs: entries, serverTime: Date.now() }));
+    } else if (req.url === '/logs') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(`<!DOCTYPE html><html><head><title>XLICON Logs</title><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Courier New',monospace;background:#0d0d0d;color:#d4d4d4;display:flex;flex-direction:column;height:100vh}header{background:#111;border-bottom:1px solid #222;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0}header h1{color:#25d366;font-size:15px;font-weight:700;letter-spacing:.5px}#pill{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#1a3a1a;color:#25d366}#controls{margin-left:auto;display:flex;gap:8px}button{padding:5px 12px;border:1px solid #333;border-radius:6px;background:#1a1a1a;color:#aaa;cursor:pointer;font-size:12px}button:hover{background:#252525;color:#eee}button.active{background:#1a3a1a;color:#25d366;border-color:#25d366}#log{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:1px}#log:empty::after{content:"Waiting for logs...";color:#444;font-size:13px;margin-top:20px}.entry{display:flex;gap:10px;font-size:12px;line-height:1.55;padding:1px 0;border-bottom:1px solid #141414}.ts{color:#555;flex-shrink:0;user-select:none}.lvl{flex-shrink:0;width:42px;font-weight:600}.lvl.info{color:#4ec9b0}.lvl.error{color:#f48771}.lvl.warn{color:#dcdcaa}.text{white-space:pre-wrap;word-break:break-all;flex:1}.text.error{color:#f48771}.text.warn{color:#dcdcaa}footer{background:#111;border-top:1px solid #222;padding:8px 16px;font-size:11px;color:#444;flex-shrink:0;display:flex;align-items:center;gap:12px}#count{margin-left:auto}</style></head><body><header><h1>🤖 XLICON-V2-MD — Live Logs</h1><span id="pill">LIVE</span><div id="controls"><button id="autoBtn" class="active" onclick="toggleAuto()">⏸ Pause</button><button onclick="clearView()">🗑 Clear view</button><button onclick="location.href='/'">← Bot</button></div></header><div id="log"></div><footer><span id="status">Connecting...</span><span id="count">0 entries</span></footer><script>let since=0,auto=true,count=0,paused=false;const box=document.getElementById('log');function fmt(ts){const d=new Date(ts);return d.toTimeString().slice(0,8)+'.'+(d.getMilliseconds()+'').padStart(3,'0');}function appendLogs(logs){if(!logs.length)return;if(paused)return;const atBottom=box.scrollHeight-box.scrollTop-box.clientHeight<60;const frag=document.createDocumentFragment();for(const e of logs){const el=document.createElement('div');el.className='entry';el.innerHTML='<span class="ts">'+fmt(e.t)+'</span><span class="lvl '+e.level+'">'+e.level+'</span><span class="text '+e.level+'">'+e.line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</span>';frag.appendChild(el);count++;}box.appendChild(frag);document.getElementById('count').textContent=count+' entries';if(atBottom)box.scrollTop=box.scrollHeight;}function clearView(){box.innerHTML='';count=0;document.getElementById('count').textContent='0 entries';}function toggleAuto(){paused=!paused;const btn=document.getElementById('autoBtn');btn.textContent=paused?'▶ Resume':'⏸ Pause';btn.className=paused?'':'active';}async function poll(){try{const r=await fetch('/api/logs?since='+since);const d=await r.json();if(d.logs&&d.logs.length){appendLogs(d.logs);since=d.serverTime;}document.getElementById('status').textContent='Live — last update '+new Date().toTimeString().slice(0,8);}catch(e){document.getElementById('status').textContent='Connection error — retrying...';}setTimeout(poll,2000);}poll();<\/script></body></html>`);
     } else {
         res.writeHead(404); res.end(JSON.stringify({ error: 'Not found' }));
     }
