@@ -27,6 +27,7 @@ function pushLog(level, args) {
     if (
         line.startsWith('Closing session: SessionEntry') ||
         line.startsWith('session closed') ||
+        line.startsWith('Closing open session in favor of incoming prekey bundle') ||
         line.includes('Bad MAC') ||
         line.includes('Failed to decrypt message with any known session') ||
         line.includes('status_cache query timed out after 5s')
@@ -48,6 +49,26 @@ let sock = null;
 let reconnectAttempts = 0;
 let generation = 0;
 let startBotCalled = false;
+let lastNotifyAt = 0; // tracks last real incoming message — for watchdog
+
+// ── Watchdog — reconnect if bot is connected but has gone silent ──────────────
+setInterval(() => {
+    if (botStatus !== 'connected' || !sock) return;
+    const connectedFor = Date.now() - (global.botStartTime || Date.now());
+    const silentFor    = lastNotifyAt > 0 ? Date.now() - lastNotifyAt : 0;
+    // Only fire if connected 3+ min and no notify message for 6+ min
+    if (connectedFor < 180000 || silentFor === 0 || silentFor < 360000) return;
+    console.warn('[Watchdog] Connected but no messages for', Math.round(silentFor / 60000) + 'min — testing socket...');
+    if (sock?.ws?.readyState === 1) {
+        sock.sendPresenceUpdate('available').catch(() => {
+            console.warn('[Watchdog] Presence update failed — forcing reconnect');
+            try { sock.ws.terminate(); } catch (_) {}
+        });
+    } else {
+        console.warn('[Watchdog] WebSocket not open (state:', sock?.ws?.readyState + ') — forcing reconnect');
+        try { sock.ws.terminate(); } catch (_) {}
+    }
+}, 60000);
 
 // ── In-memory message store ──────────────────────────────────────────────────
 const msgStore = new Map();
@@ -308,7 +329,7 @@ function startBot() {
                     console.log('[Bot] Connected as', sock.user?.id);
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
-                    }, 10000);
+                    }, 30000);
                     try {
                         await sock.sendMessage(sock.user.id, {
                             text: `✅ *XLICON-V2-MD Online!*\nPrefix: ${global.BOT_PREFIX}`
@@ -367,6 +388,7 @@ function startBot() {
 
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
                 if (generation !== myGen) return; // stale socket guard
+                if (type === 'notify') lastNotifyAt = Date.now(); // watchdog heartbeat
                 for (const rawMsg of messages) {
                     try {
                         if (rawMsg.key?.remoteJid === 'status@broadcast') {
