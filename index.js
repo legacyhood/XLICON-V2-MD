@@ -49,7 +49,7 @@ function storeMsg(msg) {
 }
 
 // ── MongoDB session ──────────────────────────────────────────────────────────
-async function saveSessionToMongo(sessionJson) {
+async function saveSessionToMongo(bundle) {
     if (!process.env.MONGO_URI) return;
     try {
         const { MongoClient } = require('mongodb');
@@ -57,7 +57,7 @@ async function saveSessionToMongo(sessionJson) {
         await c.connect();
         await c.db('xlicon_bot').collection('sessions').replaceOne(
             { _id: 'main_session' },
-            { _id: 'main_session', session: sessionJson, updatedAt: new Date() },
+            { _id: 'main_session', session: bundle, updatedAt: new Date() },
             { upsert: true }
         );
         await c.close();
@@ -97,10 +97,23 @@ async function loadStatusCacheFromMongo() {
     } catch (e) { console.error('[MongoDB] Status cache load failed:', e.message); }
 }
 
-// ── Restore session if needed ────────────────────────────────────────────────
+// ── Build full session bundle from disk ──────────────────────────────────────
+function buildSessionBundle() {
+    const sessionDir = path.join(__dirname, 'session');
+    const bundle = {};
+    try {
+        const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.json'));
+        for (const file of files) {
+            bundle[file] = JSON.parse(fs.readFileSync(path.join(sessionDir, file), 'utf8'));
+        }
+    } catch (_) {}
+    return bundle;
+}
+
+// ── Restore session — returns a Promise so startup can await it ──────────────
 // SESSION_ID format: either a multi-file bundle {"creds.json":{...},"pre-key-0.json":{...},...}
 // or legacy format (raw creds.json content). Both are supported.
-(async () => {
+const sessionRestored = (async () => {
     if (!fs.existsSync(__dirname + '/session/creds.json')) {
         const sessionJson = global.sessionid || await loadSessionFromMongo();
         if (sessionJson) {
@@ -123,6 +136,8 @@ async function loadStatusCacheFromMongo() {
                 }
             } catch (e) { console.error('[Session] Restore error:', e.message); }
         }
+    } else {
+        console.log('[Session] Session files already present on disk');
     }
 })();
 
@@ -138,7 +153,11 @@ function loadPrefix() {
             }
         }
     } catch (_) {}
-    loadStatusCacheFromMongo().catch(() => {}).finally(() => startBot());
+    // Wait for session restoration AND status cache before starting bot
+    Promise.all([
+        sessionRestored,
+        loadStatusCacheFromMongo().catch(() => {})
+    ]).finally(() => startBot());
 }
 
 async function clearSession() {
@@ -231,8 +250,11 @@ function startBot() {
 
             sock.ev.on('creds.update', async () => {
                 await saveCreds();
-                const cp = path.join(AUTH_FOLDER, 'creds.json');
-                if (fs.existsSync(cp)) saveSessionToMongo(fs.readFileSync(cp, 'utf8')).catch(() => {});
+                // Save the full session bundle (all files) so restoration is complete on next start
+                const bundle = buildSessionBundle();
+                if (bundle['creds.json']) {
+                    saveSessionToMongo(JSON.stringify(bundle)).catch(() => {});
+                }
             });
 
             // ── Load plugins ─────────────────────────────────────────────────
@@ -392,13 +414,9 @@ const server = http.createServer((req, res) => {
         if (fs.existsSync(cp)) {
             try {
                 // Bundle ALL session files so restoration is complete
-                const bundle = {};
-                const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.json'));
-                for (const file of files) {
-                    bundle[file] = JSON.parse(fs.readFileSync(path.join(sessionDir, file), 'utf8'));
-                }
+                const bundle = buildSessionBundle();
                 res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-                res.end(JSON.stringify({ session: JSON.stringify(bundle), fileCount: files.length }));
+                res.end(JSON.stringify({ session: JSON.stringify(bundle), fileCount: Object.keys(bundle).length }));
             } catch (e) {
                 res.writeHead(500); res.end(JSON.stringify({ error: e.message }));
             }
