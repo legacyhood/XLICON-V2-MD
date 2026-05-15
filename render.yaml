@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: xlicon-bot
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm install --omit=dev
+    startCommand: node index.js
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BOT_PREFIX
+        value: "."
+      - key: OWNER_NUMBER
+        value: "2348038280548"
+      - key: MONGODB_URI
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
