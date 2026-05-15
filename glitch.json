@@ -1,0 +1,7 @@
+{
+  "install": "npm install --omit=dev",
+  "start": "node index.js",
+  "watch": {
+    "ignore": "**"
+  }
+}
