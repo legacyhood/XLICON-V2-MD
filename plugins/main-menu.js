@@ -21,6 +21,7 @@ async execute(sock,m){
 ┃ ${p}ping • ${p}alive — Bot status & speed
 ┃ ${p}uptime — Running time
 ┃ ${p}stats — Full bot analytics
+┃ ${p}settings — View all ON/OFF features
 ┃ ${p}menu — This menu
 ┃ ${p}help <cmd> — Full command details
 ╰──────────────────────────
@@ -113,7 +114,6 @@ async execute(sock,m){
 ┃ ${p}todo add/list/done/remove — Task list
 ┃ ${p}note add/get/list/delete — Save notes
 ┃ ${p}remind 30m Task — Set reminder
-┃ ${p}schedule 2h Message — Send later
 ┃ ${p}calc 5*(3+2) — Calculator
 ┃ ${p}poll Q;Opt1;Opt2 — Create poll
 ┃ ${p}contact @user — Generate vCard
@@ -151,10 +151,26 @@ async execute(sock,m){
 ┃ ⚠️ ${process.env.WARN_LIMIT||3} warns = auto-kick
 ╰──────────────────────────
 
+╭─── 📅 *AUTO SCHEDULER* ──
+┃ ${p}auto add bible 06:00 — Daily Bible verse
+┃ ${p}auto add morningnews 07:00 — Morning news
+┃ ${p}auto add quote 09:00 — Daily quote
+┃ ${p}auto add riddle 12:00 — Daily riddle
+┃ ${p}auto add joke 14:00 — Daily joke
+┃ ${p}auto add fact 16:00 — Daily fact
+┃ ${p}auto add eveningnews 18:00 — Evening news
+┃ ${p}auto add motivation 05:30 — Motivation
+┃ ${p}auto list — View your schedules
+┃ ${p}auto remove <id> — Remove one
+┃ ${p}auto stop — Remove all schedules
+┃ ${p}auto test <type> — Preview now
+┃ ${p}auto types — All available types
+╰──────────────────────────
+
 ╭─── 🤖 *AUTO FEATURES* ───
 ┃ ${p}autoreply add keyword|reply
 ┃ ${p}autoreply list / remove / clear
-┃ ${p}autopost add HH:MM <msg> — Daily post
+┃ ${p}autopost add HH:MM <msg> — Daily msg
 ┃ ${p}autopost list / remove / clear
 ╰──────────────────────────
 
@@ -166,7 +182,6 @@ async execute(sock,m){
 ┃ ${p}backup — Export all settings to DM
 ┃ ${p}stats — Full bot analytics
 ┃ ${p}broadcast <msg> — Send to all groups
-┃ ${p}broadcast (reply) — Broadcast quoted msg
 ┃ ${p}broadcast list — Show all groups
 ┃ ${p}spy add/list/remove — Online tracking
 ┃ ${p}exec > <code> — Run JS code on server
