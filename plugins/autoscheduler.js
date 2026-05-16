@@ -3,24 +3,24 @@
  * Persists in MongoDB — survives restarts
  *
  * Commands:
- *   .auto add <type> <HH:MM>          — schedule daily content
- *   .auto list                         — show all schedules for this chat
- *   .auto remove <id>                  — remove a schedule
- *   .auto stop                         — remove all schedules in this chat
- *   .auto types                        — show available content types
+ *   .auto add <type> <HH:MM>   — schedule daily content
+ *   .auto list                  — show all schedules for this chat
+ *   .auto remove <id>           — remove a schedule
+ *   .auto stop                  — remove all schedules in this chat
+ *   .auto test <type>           — preview content now
+ *   .auto types                 — show available content types
  *
- * Types: bible, quote, riddle, joke, fact, news, morningnews, eveningnews,
- *        motivation, horoscope
+ * Types: bible, quote, riddle, joke, fact, news, morningnews, eveningnews, motivation
  */
 
-const fetch = require('node-fetch');
+const nodeFetch = require('node-fetch');
 const https2 = require('https');
 
 const getDb = () => global.getMongoDb();
-let _sock = null;          // WhatsApp socket reference
-let _timerStarted = false; // only start one global interval
+let _sock = null;
+let _timerStarted = false;
 
-// ── Content generators ───────────────────────────────────────────────────────
+// ── Static content banks ──────────────────────────────────────────────────────
 
 const QUOTES = [
     { q: 'The only way to do great work is to love what you do.', a: 'Steve Jobs' },
@@ -30,23 +30,20 @@ const QUOTES = [
     { q: 'The future belongs to those who believe in the beauty of their dreams.', a: 'Eleanor Roosevelt' },
     { q: 'Success is not final, failure is not fatal: It is the courage to continue that counts.', a: 'Winston Churchill' },
     { q: 'Life is what happens when you are busy making other plans.', a: 'John Lennon' },
-    { q: 'Your time is limited, do not waste it living someone else's life.', a: 'Steve Jobs' },
+    { q: 'Your time is limited, do not waste it living someone else life.', a: 'Steve Jobs' },
     { q: 'The best time to plant a tree was 20 years ago. The second best time is now.', a: 'Chinese Proverb' },
     { q: 'An unexamined life is not worth living.', a: 'Socrates' },
-    { q: 'Spread love everywhere you go. Let no one ever come to you without leaving happier.', a: 'Mother Teresa' },
+    { q: 'Spread love everywhere you go. Let no one come to you without leaving happier.', a: 'Mother Teresa' },
     { q: 'When you reach the end of your rope, tie a knot and hang on.', a: 'Franklin D. Roosevelt' },
-    { q: 'Always remember that you are absolutely unique, just like everyone else.', a: 'Margaret Mead' },
-    { q: 'Do not go where the path may lead; go instead where there is no path and leave a trail.', a: 'Ralph Waldo Emerson' },
+    { q: 'Do not go where the path may lead; go where there is no path and leave a trail.', a: 'Ralph Waldo Emerson' },
     { q: 'You will face many defeats in life, but never let yourself be defeated.', a: 'Maya Angelou' },
     { q: 'The greatest glory in living lies not in never falling, but in rising every time we fall.', a: 'Nelson Mandela' },
-    { q: 'In the end, it is not the years in your life that count. It is the life in your years.', a: 'Abraham Lincoln' },
     { q: 'Never let the fear of striking out keep you from playing the game.', a: 'Babe Ruth' },
-    { q: 'You have brains in your head. You have feet in your shoes. You can steer yourself any direction you choose.', a: 'Dr. Seuss' },
     { q: 'If life were predictable it would cease to be life and be without flavor.', a: 'Eleanor Roosevelt' },
 ];
 
 const RIDDLES = [
-    { q: 'I have cities, but no houses live there. I have mountains, but no trees. I have water, but no fish. What am I?', a: 'A map' },
+    { q: 'I have cities, but no houses. I have mountains, but no trees. I have water, but no fish. What am I?', a: 'A map' },
     { q: 'The more you take, the more you leave behind. What am I?', a: 'Footsteps' },
     { q: 'I speak without a mouth and hear without ears. I have no body, but come alive with wind. What am I?', a: 'An echo' },
     { q: 'What has hands but cannot clap?', a: 'A clock' },
@@ -58,26 +55,21 @@ const RIDDLES = [
     { q: 'I have keys but no locks. I have space but no room. You can enter but cannot go inside. What am I?', a: 'A keyboard' },
     { q: 'What has an eye but cannot see?', a: 'A needle' },
     { q: 'What can you catch but not throw?', a: 'A cold' },
-    { q: 'What runs but never walks, has a mouth but never talks, has a head but never weeps?', a: 'A river' },
     { q: 'What has 13 hearts but no other organs?', a: 'A deck of cards' },
     { q: 'I shave every day, but my beard stays the same. Who am I?', a: 'A barber' },
 ];
 
 const JOKES = [
-    ['Why do not scientists trust atoms?', 'Because they make up everything!'],
+    ['Why do scientists not trust atoms?', 'Because they make up everything!'],
     ['Why did the scarecrow win an award?', 'Because he was outstanding in his field!'],
-    ['Why do not eggs tell jokes?', 'They would crack each other up!'],
+    ['Why do eggs not tell jokes?', 'They would crack each other up!'],
     ['What do you call a fake noodle?', 'An impasta!'],
     ['Why did the bicycle fall over?', 'It was two-tired!'],
     ['I told my wife she was drawing her eyebrows too high.', 'She looked surprised.'],
     ['What do you call cheese that is not yours?', 'Nacho cheese!'],
-    ['Why cannot you give Elsa a balloon?', 'Because she will let it go!'],
-    ['What do you call a fish without eyes?', 'A fsh!'],
     ['Why did the math book look so sad?', 'Because it had too many problems!'],
     ['What do you call a sleeping dinosaur?', 'A dino-snore!'],
-    ['Why did the golfer bring an extra pair of pants?', 'In case he got a hole in one!'],
-    ['What do you call a pig that does karate?', 'A pork chop!'],
-    ['Why do not skeletons fight each other?', 'They do not have the guts!'],
+    ['Why do skeletons not fight each other?', 'They do not have the guts!'],
     ['What did the ocean say to the beach?', 'Nothing, it just waved!'],
 ];
 
@@ -90,7 +82,7 @@ const MOTIVATION = [
     'Today is your chance to do something amazing. Seize it!',
     'Wake up with determination. Go to bed with satisfaction.',
     'Good morning! Push yourself, because no one else is going to do it for you.',
-    'Every morning is a fresh start. Yesterday's failures are today's lessons.',
+    'Every morning is a fresh start. Yesterday failures are today lessons.',
     'Good morning! Believe in yourself and you are halfway there.',
 ];
 
@@ -104,192 +96,166 @@ const BIBLE_VERSES = [
 function rand(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function httpsGet(url) {
-    return new Promise((res, rej) => {
+    return new Promise((resolve, reject) => {
         https2.get(url, { headers: { 'User-Agent': 'XLICONBot/1.0' } }, r => {
-            if (r.statusCode === 301 || r.statusCode === 302) return httpsGet(r.headers.location).then(res).catch(rej);
-            let d = ''; r.on('data', c => d += c); r.on('end', () => res(d));
-        }).on('error', rej);
+            if (r.statusCode === 301 || r.statusCode === 302) {
+                return httpsGet(r.headers.location).then(resolve).catch(reject);
+            }
+            let d = '';
+            r.on('data', c => { d += c; });
+            r.on('end', () => resolve(d));
+        }).on('error', reject);
     });
 }
 
-function parseRSS(xml, limit = 5) {
+function parseRSS(xml, limit) {
+    if (limit === undefined) limit = 5;
     const items = [];
-    const re = /<item>([sS]*?)</item>/g;
+    // Use RegExp constructor to avoid forward-slash issues in regex literals
+    const itemRe = new RegExp('<item>([\s\S]*?)<\/item>', 'g');
     let m;
-    while ((m = re.exec(xml)) !== null && items.length < limit) {
-        const get = tag => { const r2 = new RegExp('<' + tag + '[^>]*>([\s\S]*?)<\/' + tag + '>'); const x = r2.exec(m[1]); return x ? x[1].replace(/<![CDATA[|]]>/g, '').trim() : ''; };
-        let link = get('link'); if (link.includes('?')) link = link.split('?')[0];
-        items.push({ title: get('title'), link, desc: get('description').slice(0, 120) });
+    while ((m = itemRe.exec(xml)) !== null && items.length < limit) {
+        const inner = m[1];
+        const getTag = function(tag) {
+            const tagRe = new RegExp('<' + tag + '[^>]*>([\s\S]*?)<\/' + tag + '>');
+            const x = tagRe.exec(inner);
+            if (!x) return '';
+            return x[1].replace(/<![CDATA[/g, '').replace(/]]>/g, '').trim();
+        };
+        let link = getTag('link');
+        if (link.indexOf('?') !== -1) link = link.split('?')[0];
+        items.push({ title: getTag('title'), link: link, desc: getTag('description').slice(0, 120) });
     }
     return items;
 }
 
+// ── Content generators ────────────────────────────────────────────────────────
+
 async function generateContent(type) {
     const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-    switch (type) {
-        case 'bible': {
-            const ref = rand(BIBLE_VERSES);
-            try {
-                const raw = await fetch('https://bible-api.com/' + encodeURIComponent(ref) + '?translation=kjv');
-                const d = await raw.json();
-                return '╭━━━━━━━━━━━━━━━━━━━━━━━╮\n'
-                     + '┃   📖  DAILY BIBLE VERSE  ┃\n'
-                     + '╰━━━━━━━━━━━━━━━━━━━━━━━╯\n\n'
-                     + d.reference + '\n\n'
-                     + '"' + (d.text || '').trim() + '"\n\n'
-                     + '— KJV Bible\n\n'
-                     + '📅 ' + today;
-            } catch {
-                return '📖 Daily Bible Verse\n\n"For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life." — John 3:16 (KJV)\n\n📅 ' + today;
-            }
+    if (type === 'bible') {
+        const ref = rand(BIBLE_VERSES);
+        try {
+            const raw = await nodeFetch('https://bible-api.com/' + encodeURIComponent(ref) + '?translation=kjv');
+            const d = await raw.json();
+            return '\u256d\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u256e\n'
+                 + '\u2503   \ud83d\udcd6  DAILY BIBLE VERSE  \u2503\n'
+                 + '\u2570\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u256f\n\n'
+                 + (d.reference || ref) + '\n\n'
+                 + '"' + (d.text || '').trim() + '"\n\n'
+                 + '— KJV Bible\n\n'
+                 + '\ud83d\udcc5 ' + today;
+        } catch (e) {
+            return '\ud83d\udcd6 Daily Bible Verse\n\n"For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life." — John 3:16 (KJV)\n\n\ud83d\udcc5 ' + today;
         }
-
-        case 'quote': {
-            const q = rand(QUOTES);
-            return '╭━━━━━━━━━━━━━━━━━━━━━━╮\n'
-                 + '┃   💬  QUOTE OF THE DAY   ┃\n'
-                 + '╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n'
-                 + '"' + q.q + '"\n\n'
-                 + '— ' + q.a + '\n\n'
-                 + '📅 ' + today;
-        }
-
-        case 'riddle': {
-            const r = rand(RIDDLES);
-            return '╭━━━━━━━━━━━━━━━━━━━━━━╮\n'
-                 + '┃   🧩  DAILY RIDDLE       ┃\n'
-                 + '╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n'
-                 + '❓ ' + r.q + '\n\n'
-                 + '💡 Reply with your answer!\n'
-                 + '_(Answer will be revealed in 10 minutes)_\n\n'
-                 + '📅 ' + today;
-        }
-
-        case 'joke': {
-            const [setup, punchline] = rand(JOKES);
-            return '╭━━━━━━━━━━━━━━━━━━━━━━╮\n'
-                 + '┃   😂  JOKE OF THE DAY    ┃\n'
-                 + '╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n'
-                 + setup + '\n\n'
-                 + punchline + ' 😂\n\n'
-                 + '📅 ' + today;
-        }
-
-        case 'fact': {
-            const APIS = [
-                { url: 'https://uselessfacts.jsph.pl/api/v2/facts/random?language=en', parse: d => d.text },
-                { url: 'https://catfact.ninja/fact', parse: d => '🐱 Cat fact: ' + d.fact },
-                { url: 'https://api.chucknorris.io/jokes/random', parse: d => d.value },
-            ];
-            const api = rand(APIS);
-            try {
-                const raw = await fetch(api.url);
-                const d = await raw.json();
-                return '╭━━━━━━━━━━━━━━━━━━━━━━╮\n'
-                     + '┃   🔬  DAILY FACT         ┃\n'
-                     + '╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n'
-                     + api.parse(d) + '\n\n'
-                     + '📅 ' + today;
-            } catch {
-                return '╭━━━━━━━━━━━━━━━━━━━━━━╮\n┃   🔬  DAILY FACT         ┃\n╰━━━━━━━━━━━━━━━━━━━━━━╯\n\nDid you know? Honey never spoils — archaeologists have found 3000-year-old honey in Egyptian tombs that was still edible!\n\n📅 ' + today;
-            }
-        }
-
-        case 'motivation': {
-            return '╭━━━━━━━━━━━━━━━━━━━━━━╮\n'
-                 + '┃   ☀️  MORNING MOTIVATION  ┃\n'
-                 + '╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n'
-                 + rand(MOTIVATION) + '\n\n'
-                 + '📅 ' + today;
-        }
-
-        case 'news':
-        case 'morningnews': {
-            try {
-                const xml = await httpsGet('https://feeds.bbci.co.uk/news/world/rss.xml');
-                const items = parseRSS(xml, 5);
-                let msg = '╭━━━━━━━━━━━━━━━━━━━━━━╮\n'
-                        + '┃   🌅  MORNING NEWS       ┃\n'
-                        + '╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n'
-                        + '📅 ' + today + '\n\n'
-                        + 'Top headlines from BBC World:\n\n';
-                items.forEach((item, i) => {
-                    msg += (i + 1) + '. ' + item.title + '\n';
-                    if (item.desc) msg += '   ' + item.desc + '\n';
-                    msg += '   ' + item.link + '\n\n';
-                });
-                return msg.trim();
-            } catch {
-                return '🌅 Morning News\n\nUnable to fetch news right now. Check back later!\n\n📅 ' + today;
-            }
-        }
-
-        case 'eveningnews': {
-            try {
-                const xml = await httpsGet('https://feeds.bbci.co.uk/news/world/rss.xml');
-                const items = parseRSS(xml, 5);
-                let msg = '╭━━━━━━━━━━━━━━━━━━━━━━╮\n'
-                        + '┃   🌆  EVENING NEWS RECAP  ┃\n'
-                        + '╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n'
-                        + '📅 ' + today + '\n\n'
-                        + 'BBC World — Evening Edition:\n\n';
-                items.forEach((item, i) => {
-                    msg += (i + 1) + '. ' + item.title + '\n';
-                    if (item.desc) msg += '   ' + item.desc + '\n';
-                    msg += '   ' + item.link + '\n\n';
-                });
-                return msg.trim();
-            } catch {
-                return '🌆 Evening News\n\nUnable to fetch news right now. Check back later!\n\n📅 ' + today;
-            }
-        }
-
-        default:
-            return null;
     }
+
+    if (type === 'quote') {
+        const q = rand(QUOTES);
+        return '\ud83d\udcac Quote of the Day\n\n"' + q.q + '"\n\n— ' + q.a + '\n\n\ud83d\udcc5 ' + today;
+    }
+
+    if (type === 'riddle') {
+        const r = rand(RIDDLES);
+        return '\ud83e\udde9 Daily Riddle\n\n\u2753 ' + r.q + '\n\n\ud83d\udca1 Reply with your answer!\n_(Answer will be revealed in 10 minutes)_\n\n\ud83d\udcc5 ' + today;
+    }
+
+    if (type === 'joke') {
+        const joke = rand(JOKES);
+        return '\ud83d\ude02 Joke of the Day\n\n' + joke[0] + '\n\n' + joke[1] + ' \ud83d\ude02\n\n\ud83d\udcc5 ' + today;
+    }
+
+    if (type === 'fact') {
+        try {
+            const raw = await nodeFetch('https://uselessfacts.jsph.pl/api/v2/facts/random?language=en');
+            const d = await raw.json();
+            return '\ud83d\udd2c Daily Fact\n\n' + d.text + '\n\n\ud83d\udcc5 ' + today;
+        } catch (e) {
+            return '\ud83d\udd2c Daily Fact\n\nDid you know? Honey never spoils — archaeologists have found 3000-year-old honey in Egyptian tombs that was still edible!\n\n\ud83d\udcc5 ' + today;
+        }
+    }
+
+    if (type === 'motivation') {
+        return '\u2600\ufe0f Morning Motivation\n\n' + rand(MOTIVATION) + '\n\n\ud83d\udcc5 ' + today;
+    }
+
+    if (type === 'news' || type === 'morningnews') {
+        try {
+            const xml = await httpsGet('https://feeds.bbci.co.uk/news/world/rss.xml');
+            const items = parseRSS(xml, 5);
+            let msg = '\ud83c\udf05 Morning News — ' + today + '\n\nTop headlines from BBC World:\n\n';
+            items.forEach(function(item, i) {
+                msg += (i + 1) + '. ' + item.title + '\n';
+                if (item.desc) msg += '   ' + item.desc + '\n';
+                msg += '   ' + item.link + '\n\n';
+            });
+            return msg.trim();
+        } catch (e) {
+            return '\ud83c\udf05 Morning News\n\nUnable to fetch news right now. Check back later!\n\n\ud83d\udcc5 ' + today;
+        }
+    }
+
+    if (type === 'eveningnews') {
+        try {
+            const xml = await httpsGet('https://feeds.bbci.co.uk/news/world/rss.xml');
+            const items = parseRSS(xml, 5);
+            let msg = '\ud83c\udfd9 Evening News — ' + today + '\n\nBBC World — Evening Edition:\n\n';
+            items.forEach(function(item, i) {
+                msg += (i + 1) + '. ' + item.title + '\n';
+                if (item.desc) msg += '   ' + item.desc + '\n';
+                msg += '   ' + item.link + '\n\n';
+            });
+            return msg.trim();
+        } catch (e) {
+            return '\ud83c\udfd9 Evening News\n\nUnable to fetch news right now. Check back later!\n\n\ud83d\udcc5 ' + today;
+        }
+    }
+
+    return null;
 }
 
-// ── Scheduler engine ─────────────────────────────────────────────────────────
+// ── Scheduler engine ──────────────────────────────────────────────────────────
 
-const RIDDLE_TIMERS = new Map(); // track answer reveal timers
+const RIDDLE_TIMERS = new Map();
 
 async function fireJob(job) {
     if (!_sock) return;
     try {
+        const riddle = job.type === 'riddle' ? rand(RIDDLES) : null;
         const text = await generateContent(job.type);
         if (!text) return;
-        await _sock.sendMessage(job.chatJid, { text });
+        await _sock.sendMessage(job.chatJid, { text: text });
 
-        // For riddles — reveal answer after 10 minutes
-        if (job.type === 'riddle') {
-            const rid = rand(RIDDLES);
-            const key = job.chatJid + job._id;
+        if (riddle) {
+            const key = job.chatJid + String(job._id);
             if (RIDDLE_TIMERS.has(key)) clearTimeout(RIDDLE_TIMERS.get(key));
-            const t = setTimeout(async () => {
-                try { await _sock.sendMessage(job.chatJid, { text: '💡 Riddle Answer: ' + rid.a }); } catch {}
+            const t = setTimeout(async function() {
+                try { await _sock.sendMessage(job.chatJid, { text: '\ud83d\udca1 Riddle Answer: ' + riddle.a }); } catch (e) {}
                 RIDDLE_TIMERS.delete(key);
             }, 10 * 60 * 1000);
             RIDDLE_TIMERS.set(key, t);
         }
 
-        // Update lastRun in DB
         const db = await getDb();
-        if (db) await db.collection('auto_schedules').updateOne(
-            { _id: job._id },
-            { $set: { lastRun: new Date() } }
-        );
+        if (db) {
+            await db.collection('auto_schedules').updateOne(
+                { _id: job._id },
+                { $set: { lastRun: new Date() } }
+            );
+        }
     } catch (e) {
         console.error('[autoscheduler] fireJob error:', e.message);
     }
 }
 
 function parseHHMM(str) {
-    const m = str.match(/^(d{1,2}):(d{2})$/);
-    if (!m) return null;
-    const h = parseInt(m[1]), min = parseInt(m[2]);
+    const match = str.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) return null;
+    const h = parseInt(match[1], 10);
+    const min = parseInt(match[2], 10);
     if (h < 0 || h > 23 || min < 0 || min > 59) return null;
-    return { h, min };
+    return { h: h, min: min };
 }
 
 async function checkSchedules() {
@@ -301,12 +267,11 @@ async function checkSchedules() {
     const curM = now.getMinutes();
 
     const jobs = await db.collection('auto_schedules').find({ enabled: true }).toArray();
-    for (const job of jobs) {
+    for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
         const t = parseHHMM(job.time);
         if (!t) continue;
         if (t.h !== curH || t.min !== curM) continue;
-
-        // Check if already ran this minute
         if (job.lastRun) {
             const lr = new Date(job.lastRun);
             if (lr.getFullYear() === now.getFullYear() &&
@@ -315,7 +280,6 @@ async function checkSchedules() {
                 lr.getHours() === curH &&
                 lr.getMinutes() === curM) continue;
         }
-
         fireJob(job);
     }
 }
@@ -323,42 +287,39 @@ async function checkSchedules() {
 function startGlobalTimer() {
     if (_timerStarted) return;
     _timerStarted = true;
-    // Run every 60 seconds, aligned to the minute
     const now = new Date();
     const msUntilNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-    setTimeout(() => {
+    setTimeout(function() {
         checkSchedules();
         setInterval(checkSchedules, 60 * 1000);
     }, msUntilNextMinute);
 }
 
-// ── Command handler ──────────────────────────────────────────────────────────
+// ── Command handler ───────────────────────────────────────────────────────────
 
 const VALID_TYPES = ['bible', 'quote', 'riddle', 'joke', 'fact', 'news', 'morningnews', 'eveningnews', 'motivation'];
 
-const TYPES_INFO = `╭━━━━━━━━━━━━━━━━━━━━━━━╮
-┃   📋  AVAILABLE TYPES    ┃
-╰━━━━━━━━━━━━━━━━━━━━━━━╯
-
-📖 bible       — Random Bible verse
-💬 quote       — Inspirational quote
-🧩 riddle      — Daily riddle (answer in 10 min)
-😂 joke        — Random joke
-🔬 fact        — Interesting fact
-🌅 morningnews — BBC morning headlines
-🌆 eveningnews — BBC evening recap
-📰 news        — BBC world news
-☀️ motivation  — Morning motivation
-
-Usage:
-.auto add <type> <HH:MM>
-
-Examples:
-.auto add bible 06:00
-.auto add morningnews 07:30
-.auto add quote 09:00
-.auto add riddle 12:00
-.auto add eveningnews 18:00`;
+const TYPES_INFO = [
+    '\ud83d\udccb Available Types',
+    '',
+    '\ud83d\udcd6 bible       — Random Bible verse',
+    '\ud83d\udcac quote       — Inspirational quote',
+    '\ud83e\udde9 riddle      — Daily riddle (answer in 10 min)',
+    '\ud83d\ude02 joke        — Random joke',
+    '\ud83d\udd2c fact        — Interesting fact',
+    '\ud83c\udf05 morningnews — BBC morning headlines',
+    '\ud83c\udfd9 eveningnews — BBC evening recap',
+    '\ud83d\udcf0 news        — BBC world news',
+    '\u2600\ufe0f motivation  — Morning motivation',
+    '',
+    'Usage:  .auto add <type> <HH:MM>',
+    '',
+    'Examples:',
+    '.auto add bible 06:00',
+    '.auto add morningnews 07:30',
+    '.auto add eveningnews 18:00',
+    '.auto add riddle 12:00',
+].join('\n');
 
 module.exports = {
     name: 'auto',
@@ -372,146 +333,141 @@ module.exports = {
         const db = await getDb();
         const sub = (args[0] || '').toLowerCase();
 
-        // .auto types
         if (sub === 'types' || sub === 'list-types') {
             return m.reply(TYPES_INFO);
         }
 
-        // .auto list
         if (sub === 'list') {
-            if (!db) return m.reply('❌ Database not connected.');
+            if (!db) return m.reply('\u274c Database not connected.');
             const jobs = await db.collection('auto_schedules').find({ chatJid: m.from }).toArray();
-            if (!jobs.length) return m.reply('📭 No schedules set for this chat.\n\nUse .auto add <type> <HH:MM> to add one.');
-            let msg = '╭━━━━━━━━━━━━━━━━━━━━━━━╮\n┃   📅  YOUR SCHEDULES     ┃\n╰━━━━━━━━━━━━━━━━━━━━━━━╯\n\n';
-            jobs.forEach((j, i) => {
+            if (!jobs.length) return m.reply('\ud83d\udced No schedules set for this chat.\n\nUse .auto add <type> <HH:MM> to add one.');
+            let msg = '\ud83d\udcc5 Your Schedules\n\n';
+            jobs.forEach(function(j, i) {
                 msg += (i + 1) + '. ' + j.type.toUpperCase() + ' at ' + j.time + '\n';
-                msg += '   ID: ' + j._id.toString().slice(-6) + '\n';
-                msg += '   Status: ' + (j.enabled ? '🟢 Active' : '🔴 Paused') + '\n\n';
+                msg += '   ID: ' + String(j._id).slice(-6) + '\n';
+                msg += '   Status: ' + (j.enabled ? '\ud83d\udfe2 Active' : '\ud83d\udd34 Paused') + '\n\n';
             });
             msg += 'To remove: .auto remove <last-6-chars-of-ID>';
             return m.reply(msg);
         }
 
-        // .auto stop
         if (sub === 'stop' || sub === 'clear') {
-            if (!db) return m.reply('❌ Database not connected.');
+            if (!db) return m.reply('\u274c Database not connected.');
             const result = await db.collection('auto_schedules').deleteMany({ chatJid: m.from });
-            return m.reply('🗑️ Removed all ' + result.deletedCount + ' schedule(s) for this chat.');
+            return m.reply('\ud83d\uddd1 Removed all ' + result.deletedCount + ' schedule(s) for this chat.');
         }
 
-        // .auto remove <id>
         if (sub === 'remove' || sub === 'delete' || sub === 'rm') {
-            if (!db) return m.reply('❌ Database not connected.');
+            if (!db) return m.reply('\u274c Database not connected.');
             const shortId = args[1];
             if (!shortId) return m.reply('Usage: .auto remove <ID>\nGet IDs from .auto list');
             const jobs = await db.collection('auto_schedules').find({ chatJid: m.from }).toArray();
-            const job = jobs.find(j => j._id.toString().slice(-6) === shortId);
-            if (!job) return m.reply('❌ Schedule ID not found. Use .auto list to see your IDs.');
+            const job = jobs.find(function(j) { return String(j._id).slice(-6) === shortId; });
+            if (!job) return m.reply('\u274c Schedule ID not found. Use .auto list to see your IDs.');
             await db.collection('auto_schedules').deleteOne({ _id: job._id });
-            return m.reply('✅ Removed ' + job.type.toUpperCase() + ' at ' + job.time + ' schedule.');
+            return m.reply('\u2705 Removed ' + job.type.toUpperCase() + ' at ' + job.time + ' schedule.');
         }
 
-        // .auto test <type>
         if (sub === 'test') {
-            const type = args[1]?.toLowerCase();
-            if (!VALID_TYPES.includes(type)) return m.reply('❌ Unknown type. Use .auto types to see options.');
-            await m.react('⏳');
-            const text = await generateContent(type).catch(e => '❌ Error: ' + e.message);
-            return m.reply(text);
+            const type = (args[1] || '').toLowerCase();
+            if (!VALID_TYPES.includes(type)) return m.reply('\u274c Unknown type. Use .auto types to see options.');
+            await m.react('\u23f3');
+            try {
+                const text = await generateContent(type);
+                return m.reply(text || '\u274c Could not generate content for type: ' + type);
+            } catch (e) {
+                return m.reply('\u274c Error: ' + e.message);
+            }
         }
 
-        // .auto add <type> <HH:MM>
         if (sub === 'add') {
-            const type = args[1]?.toLowerCase();
-            const timeStr = args[2];
+            const type = (args[1] || '').toLowerCase();
+            const timeStr = args[2] || '';
 
-            if (!type || !timeStr) return m.reply(
-`Usage: .auto add <type> <HH:MM>
+            if (!type || !timeStr) {
+                return m.reply([
+                    'Usage: .auto add <type> <HH:MM>',
+                    '',
+                    'Examples:',
+                    '.auto add bible 06:00',
+                    '.auto add morningnews 07:30',
+                    '.auto add eveningnews 18:00',
+                    '.auto add quote 09:00',
+                    '.auto add riddle 12:00',
+                    '',
+                    'Use .auto types to see all options',
+                ].join('\n'));
+            }
 
-Examples:
-.auto add bible 06:00
-.auto add morningnews 07:30
-.auto add eveningnews 18:00
-.auto add quote 09:00
-.auto add riddle 12:00
-
-Use .auto types to see all options`
-            );
-
-            if (!VALID_TYPES.includes(type))
-                return m.reply('❌ Unknown type: ' + type + '\n\nUse .auto types to see available options.');
+            if (!VALID_TYPES.includes(type)) {
+                return m.reply('\u274c Unknown type: ' + type + '\n\nUse .auto types to see available options.');
+            }
 
             const parsed = parseHHMM(timeStr);
-            if (!parsed)
-                return m.reply('❌ Invalid time format. Use HH:MM (24-hour)\n\nExamples: 06:00 | 07:30 | 18:00 | 21:00');
+            if (!parsed) {
+                return m.reply('\u274c Invalid time format. Use HH:MM (24-hour)\n\nExamples: 06:00 | 07:30 | 18:00 | 21:00');
+            }
 
-            if (!db) return m.reply('❌ Database not connected.');
+            if (!db) return m.reply('\u274c Database not connected.');
 
-            // Check limit per chat
             const existing = await db.collection('auto_schedules').countDocuments({ chatJid: m.from });
-            if (existing >= 10) return m.reply('❌ Maximum 10 schedules per chat.\nRemove one first with .auto remove <id>');
+            if (existing >= 10) {
+                return m.reply('\u274c Maximum 10 schedules per chat. Remove one first with .auto remove <id>');
+            }
 
-            // Check duplicate
-            const dup = await db.collection('auto_schedules').findOne({ chatJid: m.from, type, time: timeStr });
-            if (dup) return m.reply('⚠️ You already have ' + type.toUpperCase() + ' scheduled at ' + timeStr);
+            const dup = await db.collection('auto_schedules').findOne({ chatJid: m.from, type: type, time: timeStr });
+            if (dup) return m.reply('\u26a0\ufe0f You already have ' + type.toUpperCase() + ' scheduled at ' + timeStr);
 
             await db.collection('auto_schedules').insertOne({
                 chatJid: m.from,
-                type,
+                type: type,
                 time: timeStr,
                 enabled: true,
                 createdAt: new Date(),
                 lastRun: null,
             });
 
-            const typeEmojis = { bible:'📖', quote:'💬', riddle:'🧩', joke:'😂', fact:'🔬', news:'📰', morningnews:'🌅', eveningnews:'🌆', motivation:'☀️' };
-            const emoji = typeEmojis[type] || '📅';
-
-            return m.reply(
-`╭━━━━━━━━━━━━━━━━━━━━━━━╮
-┃   ✅  SCHEDULE CREATED   ┃
-╰━━━━━━━━━━━━━━━━━━━━━━━╯
-
-${emoji} Type   : ${type.toUpperCase()}
-⏰ Time   : ${timeStr} daily
-🔄 Status : 🟢 Active
-
-This chat will receive ${type} automatically every day at ${timeStr}.
-
-Use .auto list to see all schedules
-Use .auto test ${type} to preview now`
-            );
+            return m.reply([
+                '\u2705 Schedule Created!',
+                '',
+                'Type   : ' + type.toUpperCase(),
+                'Time   : ' + timeStr + ' daily',
+                'Status : \ud83d\udfe2 Active',
+                '',
+                'This chat will receive ' + type + ' every day at ' + timeStr + '.',
+                '',
+                'Use .auto list to see all schedules',
+                'Use .auto test ' + type + ' to preview now',
+            ].join('\n'));
         }
 
         // Default help
-        return m.reply(
-`╭━━━━━━━━━━━━━━━━━━━━━━━╮
-┃   📅  AUTO SCHEDULER     ┃
-╰━━━━━━━━━━━━━━━━━━━━━━━╯
-
-Schedule daily content that sends automatically every day at your chosen time.
-
-Commands:
-.auto add <type> <HH:MM>   — add schedule
-.auto list                  — view schedules
-.auto remove <id>           — remove one
-.auto stop                  — remove all
-.auto test <type>           — preview now
-.auto types                 — see all types
-
-Examples:
-.auto add bible 06:00
-.auto add morningnews 07:00
-.auto add riddle 12:00
-.auto add eveningnews 18:00
-.auto add motivation 05:30`
-        );
+        return m.reply([
+            '\ud83d\udcc5 Auto Scheduler',
+            '',
+            'Schedule daily content that sends automatically every day at your chosen time.',
+            '',
+            'Commands:',
+            '.auto add <type> <HH:MM>  — add schedule',
+            '.auto list                — view schedules',
+            '.auto remove <id>         — remove one',
+            '.auto stop                — remove all',
+            '.auto test <type>         — preview now',
+            '.auto types               — see all types',
+            '',
+            'Examples:',
+            '.auto add bible 06:00',
+            '.auto add morningnews 07:00',
+            '.auto add riddle 12:00',
+            '.auto add eveningnews 18:00',
+            '.auto add motivation 05:30',
+        ].join('\n'));
     },
 
-    // Boot scheduler on first message (so sock reference is captured)
-    async onMessage(sock) {
-        if (_sock) return;
-        _sock = sock;
-        startGlobalTimer();
+    async onMessage(sock, m) {
+        if (!_sock) {
+            _sock = sock;
+            startGlobalTimer();
+        }
     },
 };
