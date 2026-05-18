@@ -359,6 +359,7 @@ function startBot() {
                     botStatus = 'connected';
                     reconnectAttempts = 0;
                     global.botStartTime = Date.now();
+                    global.sock = sock; // expose for plugins that need sock without onMessage
                     console.log('[Bot] Connected as', sock.user?.id);
                     // Fetch owner's LID so group messages (which use LID JIDs) can be owner-checked
                     try {
@@ -375,6 +376,12 @@ function startBot() {
                     // Upload fresh prekeys immediately so contacts can decrypt our replies
                     // without waiting for the next key exchange cycle (fixes "Waiting for message")
                     try { await sock.uploadPreKeys(); } catch (_) {}
+                    // Notify plugins that bot is connected — starts timers, loads state, etc.
+                    for (const plugin of new Set(plugins.values())) {
+                        if (typeof plugin.onStart === 'function') {
+                            plugin.onStart(sock).catch(e => console.error('[onStart:' + plugin.name + ']', e.message));
+                        }
+                    }
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) sock.sendPresenceUpdate('available').catch(() => {});
                     }, 30000);
