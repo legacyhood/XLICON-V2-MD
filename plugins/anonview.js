@@ -53,8 +53,8 @@ async function compressImage(buffer) {
     try {
         const sharp = require('sharp');
         return await sharp(buffer)
-            .resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 35 })
+            .resize({ width: 720, height: 720, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 70 })
             .toBuffer();
     } catch (e) {
         // sharp not ready yet — store raw if small enough
