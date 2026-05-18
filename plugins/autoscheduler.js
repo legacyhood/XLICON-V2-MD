@@ -220,12 +220,13 @@ async function generateContent(type) {
 const RIDDLE_TIMERS = new Map();
 
 async function fireJob(job) {
-    if (!_sock) return;
+    const activeSock = _sock || global.sock;
+    if (!activeSock) return;
     try {
         const riddle = job.type === 'riddle' ? rand(RIDDLES) : null;
         const text = await generateContent(job.type);
         if (!text) return;
-        await _sock.sendMessage(job.chatJid, { text: text });
+        await activeSock.sendMessage(job.chatJid, { text: text });
 
         if (riddle) {
             const key = job.chatJid + String(job._id);
@@ -259,12 +260,17 @@ function parseHHMM(str) {
 }
 
 async function checkSchedules() {
-    if (!_sock) return;
+    const activeSock = _sock || global.sock;
+    if (!activeSock) return;
     const db = await getDb();
     if (!db) return;
     const now = new Date();
-    const curH = now.getHours();
-    const curM = now.getMinutes();
+    // UTC+1 = WAT (Nigeria) — schedules fire at the time you typed, not server UTC
+    const UTC_OFFSET = 1;
+    const localMs  = now.getTime() + UTC_OFFSET * 3600000;
+    const local    = new Date(localMs);
+    const curH = local.getUTCHours();
+    const curM = local.getUTCMinutes();
 
     const jobs = await db.collection('auto_schedules').find({ enabled: true }).toArray();
     for (let i = 0; i < jobs.length; i++) {
@@ -320,6 +326,13 @@ const TYPES_INFO = [
     '.auto add eveningnews 18:00',
     '.auto add riddle 12:00',
 ].join('\n');
+
+// Called by index.js when bot connects — starts timer immediately on boot
+async function onStartHandler(sock) {
+    _sock = sock;
+    startGlobalTimer();
+    console.log('[autoscheduler] Timer started via onStart hook');
+}
 
 module.exports = {
     name: 'auto',
@@ -470,4 +483,6 @@ module.exports = {
             startGlobalTimer();
         }
     },
+
+    onStart: onStartHandler,
 };
