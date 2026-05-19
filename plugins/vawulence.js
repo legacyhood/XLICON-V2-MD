@@ -1291,19 +1291,18 @@ function downloadUrl(url) {
     });
 }
 
-// ─── Local fallback ───────────────────────────────────────────────────────────
+let _localDeck = [];
 function pickLocal() {
-    const shuffled = LOCAL_MEMES.slice().sort(() => Math.random() - 0.5);
-    for (const name of shuffled) {
-        const f = path.join(MEME_DIR, name);
-        if (fs.existsSync(f)) {
-            const buf = fs.readFileSync(f);
-            const ext = name.split('.').pop().toLowerCase();
-            const ct = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
-            return { buf, ct };
-        }
-    }
-    return null;
+    const all = getLocalMemes();
+    if (all.length === 0) return null;
+    if (_localDeck.length === 0) _localDeck = all.slice().sort(() => Math.random() - 0.5);
+    const file = _localDeck.pop() || all[Math.floor(Math.random() * all.length)];
+    try {
+        const buf = fs.readFileSync(file);
+        const ext = file.split('.').pop().toLowerCase();
+        const ct  = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+        return { buf, ct };
+    } catch (_) { return null; }
 }
 
 // ─── Plugin ───────────────────────────────────────────────────────────────────
@@ -1322,16 +1321,15 @@ module.exports = {
 
         let imgData = null;
 
-        // Try up to 8 URLs from the KYM pool (all guaranteed Pepe)
-        for (let attempt = 0; attempt < 8; attempt++) {
-            try {
-                imgData = await downloadUrl(nextUrl());
-                break;
-            } catch (_) { /* try next slot */ }
-        }
+        // ── Priority 1: owner-curated images saved via .savevaw ─────────────
+        imgData = pickLocal();
 
-        // Final fallback: local verified memes
-        if (!imgData) imgData = pickLocal();
+        // ── Priority 2: KnowYourMeme Pepe pool (1211 verified real Pepe images)
+        if (!imgData) {
+            for (let attempt = 0; attempt < 8; attempt++) {
+                try { imgData = await downloadUrl(nextUrl()); break; } catch (_) {}
+            }
+        }
 
         try {
             if (imgData) {
