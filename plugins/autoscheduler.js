@@ -288,22 +288,20 @@ async function generateContent(type) {
 
     if (type === 'news' || type === 'morningnews') {
         try {
-            const xml = await httpsGet(src.url);
-            const items = parseRSS(xml, 5);
-            if (!items.length) return '\ud83c\udf05 Morning News\n\nNo headlines from ' + src.name + ' right now.\n\n\ud83d\udcc5 ' + today;
-            const payloads = [];
-            payloads.push({ text: '\ud83c\udf05 *Morning News \u2014 ' + today + '*\n\ud83d\udce1 _' + src.name + ' \u2014 Top 5 Headlines_' });
-            items.forEach(function(item, i) {
-                const caption = (i + 1) + '. *' + item.title + '*'
-                    + (item.desc ? '\n\n' + item.desc : '')
-                    + (item.link ? '\n\n\ud83d\udd17 ' + item.link : '');
-                if (item.thumbnail) {
-                    payloads.push({ image: { url: item.thumbnail }, caption: caption });
-                } else {
-                    payloads.push({ text: caption });
-                }
+            var morningStories = await fetchAggregatedNews(5);
+            if (!morningStories.length) return '\ud83c\udf05 Morning News\n\nUnable to reach news sources right now.\n\n\ud83d\udcc5 ' + today;
+            var mPayloads = [];
+            mPayloads.push({ text: '\ud83c\udf05 *Morning News \u2014 ' + today + '*\n\ud83d\udce1 _Top 5 World Stories \u2014 aggregated from BBC, CNN, Sky News, Euronews, Al Jazeera & Arise TV_' });
+            morningStories.forEach(function(story, i) {
+                var srcLines = story.sources.map(function(s) { return '\ud83d\udcf0 *' + s.name + '*: ' + s.link; }).join('\n');
+                var badge = story.outletCount > 1 ? '\n\ud83d\udd25 _Trending \u2014 covered by ' + story.outletCount + ' outlets_' : '';
+                var cap = (i + 1) + '. *' + story.title + '*'
+                    + (story.desc ? '\n\n' + story.desc : '')
+                    + badge + '\n\n' + srcLines;
+                if (story.thumbnail) { mPayloads.push({ image: { url: story.thumbnail }, caption: cap }); }
+                else { mPayloads.push({ text: cap }); }
             });
-            return payloads;
+            return mPayloads;
         } catch (e) {
             return '\ud83c\udf05 Morning News\n\nUnable to fetch news right now.\n\n\ud83d\udcc5 ' + today;
         }
@@ -311,22 +309,20 @@ async function generateContent(type) {
 
     if (type === 'eveningnews') {
         try {
-            const xml = await httpsGet(src.url);
-            const items = parseRSS(xml, 5);
-            if (!items.length) return '\ud83c\udfd9 Evening News\n\nNo headlines from ' + src.name + ' right now.\n\n\ud83d\udcc5 ' + today;
-            const payloads = [];
-            payloads.push({ text: '\ud83c\udfd9 *Evening News \u2014 ' + today + '*\n\ud83d\udce1 _' + src.name + ' \u2014 Evening Edition_' });
-            items.forEach(function(item, i) {
-                const caption = (i + 1) + '. *' + item.title + '*'
-                    + (item.desc ? '\n\n' + item.desc : '')
-                    + (item.link ? '\n\n\ud83d\udd17 ' + item.link : '');
-                if (item.thumbnail) {
-                    payloads.push({ image: { url: item.thumbnail }, caption: caption });
-                } else {
-                    payloads.push({ text: caption });
-                }
+            var eveningStories = await fetchAggregatedNews(5);
+            if (!eveningStories.length) return '\ud83c\udfd9 Evening News\n\nUnable to reach news sources right now.\n\n\ud83d\udcc5 ' + today;
+            var ePayloads = [];
+            ePayloads.push({ text: '\ud83c\udfd9 *Evening News \u2014 ' + today + '*\n\ud83d\udce1 _Top 5 World Stories \u2014 aggregated from BBC, CNN, Sky News, Euronews, Al Jazeera & Arise TV_' });
+            eveningStories.forEach(function(story, i) {
+                var srcLines = story.sources.map(function(s) { return '\ud83d\udcf0 *' + s.name + '*: ' + s.link; }).join('\n');
+                var badge = story.outletCount > 1 ? '\n\ud83d\udd25 _Trending \u2014 covered by ' + story.outletCount + ' outlets_' : '';
+                var cap = (i + 1) + '. *' + story.title + '*'
+                    + (story.desc ? '\n\n' + story.desc : '')
+                    + badge + '\n\n' + srcLines;
+                if (story.thumbnail) { ePayloads.push({ image: { url: story.thumbnail }, caption: cap }); }
+                else { ePayloads.push({ text: cap }); }
             });
-            return payloads;
+            return ePayloads;
         } catch (e) {
             return '\ud83c\udfd9 Evening News\n\nUnable to fetch news right now.\n\n\ud83d\udcc5 ' + today;
         }
