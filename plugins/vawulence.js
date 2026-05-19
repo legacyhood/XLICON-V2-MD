@@ -1313,6 +1313,37 @@ function pickLocal() {
     } catch (_) { return null; }
 }
 
+// ─── Restore owner-saved images from MongoDB on every bot startup ───────────
+// Railway filesystem is ephemeral; this puts owner memes back onto disk
+// from MongoDB so they stay in the pool after every redeploy.
+async function restoreFromMongo() {
+    try {
+        const db = await global.getMongoDb().catch(() => null);
+        if (!db) return;
+        const docs = await db.collection('vaw_images').find({}).toArray();
+        if (!docs.length) return;
+        if (!fs.existsSync(MEME_DIR)) fs.mkdirSync(MEME_DIR, { recursive: true });
+        let restored = 0;
+        for (const doc of docs) {
+            const dest = path.join(MEME_DIR, doc._id);
+            if (fs.existsSync(dest)) continue;
+            try {
+                const raw = doc.data;
+                const buf = Buffer.isBuffer(raw) ? raw
+                          : raw?.buffer ? Buffer.from(raw.buffer)
+                          : Buffer.from(raw);
+                if (buf.length < 2000) continue;
+                fs.writeFileSync(dest, buf);
+                restored++;
+            } catch (_) {}
+        }
+        if (restored > 0) console.log('[vawulence] Restored', restored, 'owner image(s) from MongoDB');
+    } catch (e) {
+        console.error('[vawulence] MongoDB restore failed:', e.message);
+    }
+}
+setTimeout(() => restoreFromMongo().catch(() => {}), 6000);
+
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 module.exports = {
     name: 'vawulence',
