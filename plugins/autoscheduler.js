@@ -224,9 +224,21 @@ async function fireJob(job) {
     if (!activeSock) return;
     try {
         const riddle = job.type === 'riddle' ? rand(RIDDLES) : null;
-        const text = await generateContent(job.type);
-        if (!text) return;
-        await activeSock.sendMessage(job.chatJid, { text: text });
+        const content = await generateContent(job.type);
+        if (!content) return;
+        // content can be a plain string OR an array of message payloads (used by news)
+        if (Array.isArray(content)) {
+            for (const payload of content) {
+                try {
+                    await activeSock.sendMessage(job.chatJid, payload);
+                    await new Promise(function(r) { setTimeout(r, 800); });
+                } catch (e) {
+                    console.error('[autoscheduler] payload send error:', e.message && e.message.slice(0, 80));
+                }
+            }
+        } else {
+            await activeSock.sendMessage(job.chatJid, { text: content });
+        }
 
         if (riddle) {
             const key = job.chatJid + String(job._id);
