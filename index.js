@@ -505,6 +505,11 @@ function startBot() {
                             }
                             continue;
                         }
+                        // ── Batch image hook: catch owner album images with no caption ──────────
+                        if (rawMsg.key?.fromMe && m.type === 'imageMessage' && m.isMedia) {
+                            const _svp = plugins.get('savevaw');
+                            if (_svp?.onOwnerImage) _svp.onOwnerImage(sock, m).catch(() => {});
+                        }
                         if (rawMsg.key?.fromMe) continue;
                         for (const plugin of new Set(plugins.values())) {
                             if (typeof plugin.onMessage !== 'function') continue;
