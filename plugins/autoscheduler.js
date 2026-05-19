@@ -108,6 +108,21 @@ function httpsGet(url) {
     });
 }
 
+// ── News sources ──────────────────────────────────────────────────────────────
+// Each entry: { name, url, hasImages }
+// hasImages = true means the feed includes <media:thumbnail> per item
+const NEWS_SOURCES = {
+    bbc:        { name: 'BBC World News',    url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                              hasImages: true  },
+    cnn:        { name: 'CNN World News',    url: 'http://rss.cnn.com/rss/edition_world.rss',                                 hasImages: true  },
+    skynews:    { name: 'Sky News World',    url: 'https://feeds.skynews.com/feeds/rss/world.xml',                            hasImages: true  },
+    euronews:   { name: 'Euronews',          url: 'https://www.euronews.com/rss?format=mrss&level=theme&name=news',           hasImages: true  },
+    aljazeera:  { name: 'Al Jazeera',        url: 'https://www.aljazeera.com/xml/rss/all.xml',                                hasImages: false },
+    arise:      { name: 'Arise TV (Nigeria)',url: 'https://www.arise.tv/feed/',                                               hasImages: false },
+};
+const DEFAULT_NEWS_SOURCE = 'bbc';
+const NEWS_SOURCE_KEYS = Object.keys(NEWS_SOURCES);
+
+
 function parseRSS(xml, limit) {
     if (limit === undefined) limit = 5;
     const items = [];
@@ -144,7 +159,10 @@ function parseRSS(xml, limit) {
 
 // ── Content generators ────────────────────────────────────────────────────────
 
-async function generateContent(type) {
+async function generateContent(type, source) {
+    // Resolve news source — defaults to bbc
+    const srcKey = (source && NEWS_SOURCES[source]) ? source : DEFAULT_NEWS_SOURCE;
+    const src = NEWS_SOURCES[srcKey];
     const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     if (type === 'bible') {
@@ -195,11 +213,11 @@ async function generateContent(type) {
 
     if (type === 'news' || type === 'morningnews') {
         try {
-            const xml = await httpsGet('https://feeds.bbci.co.uk/news/world/rss.xml');
+            const xml = await httpsGet(src.url);
             const items = parseRSS(xml, 5);
-            if (!items.length) return '\ud83c\udf05 Morning News\n\nNo headlines found right now.\n\n\ud83d\udcc5 ' + today;
+            if (!items.length) return '\ud83c\udf05 Morning News\n\nNo headlines from ' + src.name + ' right now.\n\n\ud83d\udcc5 ' + today;
             const payloads = [];
-            payloads.push({ text: '\ud83c\udf05 *Morning News \u2014 ' + today + '*\n\ud83d\udce1 _BBC World News \u2014 Top 5 Headlines_' });
+            payloads.push({ text: '\ud83c\udf05 *Morning News \u2014 ' + today + '*\n\ud83d\udce1 _' + src.name + ' \u2014 Top 5 Headlines_' });
             items.forEach(function(item, i) {
                 const caption = (i + 1) + '. *' + item.title + '*'
                     + (item.desc ? '\n\n' + item.desc : '')
@@ -218,11 +236,11 @@ async function generateContent(type) {
 
     if (type === 'eveningnews') {
         try {
-            const xml = await httpsGet('https://feeds.bbci.co.uk/news/world/rss.xml');
+            const xml = await httpsGet(src.url);
             const items = parseRSS(xml, 5);
-            if (!items.length) return '\ud83c\udfd9 Evening News\n\nNo headlines found right now.\n\n\ud83d\udcc5 ' + today;
+            if (!items.length) return '\ud83c\udfd9 Evening News\n\nNo headlines from ' + src.name + ' right now.\n\n\ud83d\udcc5 ' + today;
             const payloads = [];
-            payloads.push({ text: '\ud83c\udfd9 *Evening News \u2014 ' + today + '*\n\ud83d\udce1 _BBC World News \u2014 Evening Edition_' });
+            payloads.push({ text: '\ud83c\udfd9 *Evening News \u2014 ' + today + '*\n\ud83d\udce1 _' + src.name + ' \u2014 Evening Edition_' });
             items.forEach(function(item, i) {
                 const caption = (i + 1) + '. *' + item.title + '*'
                     + (item.desc ? '\n\n' + item.desc : '')
@@ -251,7 +269,7 @@ async function fireJob(job) {
     if (!activeSock) return;
     try {
         const riddle = job.type === 'riddle' ? rand(RIDDLES) : null;
-        const content = await generateContent(job.type);
+        const content = await generateContent(job.type, job.source);
         if (!content) return;
         // content can be a plain string OR an array of message payloads (used by news)
         if (Array.isArray(content)) {
@@ -361,8 +379,13 @@ const TYPES_INFO = [
     '',
     'Examples:',
     '.auto add bible 06:00',
-    '.auto add morningnews 07:30',
+    '.auto add morningnews 07:30          (BBC default)',
+    '.auto add morningnews 07:30 cnn      (CNN)',
+    '.auto add morningnews 07:30 skynews  (Sky News)',
     '.auto add eveningnews 18:00',
+    '(Use .auto sources to see all news sources)',
+    '.auto test morningnews cnn           (test CNN now)',
+    ''
     '.auto add riddle 12:00',
 ].join('\n');
 
@@ -389,6 +412,16 @@ module.exports = {
             return m.reply(TYPES_INFO);
         }
 
+        if (sub === 'sources') {
+            const lines = ['\ud83d\udce1 *Available News Sources*', '', 'Use with: .auto add morningnews HH:MM <source>', 'Or test:  .auto test morningnews <source>', ''];
+            Object.entries(NEWS_SOURCES).forEach(function(entry) {
+                const key = entry[0]; const s = entry[1];
+                lines.push((s.hasImages ? '\ud83d\uddbc' : '\ud83d\udcdd') + ' *' + key + '* \u2014 ' + s.name + (s.hasImages ? ' (with images)' : ' (text only)'));
+            });
+            lines.push('', 'Default: *bbc*', '', 'Examples:', '.auto add morningnews 07:00 cnn', '.auto add eveningnews 18:00 aljazeera', '.auto test morningnews skynews');
+            return m.reply(lines.join('\n'));
+        }
+
         if (sub === 'list') {
             if (!db) return m.reply('\u274c Database not connected.');
             const jobs = await db.collection('auto_schedules').find({ chatJid: m.from }).toArray();
@@ -397,7 +430,9 @@ module.exports = {
             jobs.forEach(function(j, i) {
                 msg += (i + 1) + '. ' + j.type.toUpperCase() + ' at ' + j.time + '\n';
                 msg += '   ID: ' + String(j._id).slice(-6) + '\n';
-                msg += '   Status: ' + (j.enabled ? '\ud83d\udfe2 Active' : '\ud83d\udd34 Paused') + '\n\n';
+                const newsTypesList = ['news','morningnews','eveningnews'];
+                const srcInfo = newsTypesList.includes(j.type) ? '\n   Source: ' + (NEWS_SOURCES[j.source] ? NEWS_SOURCES[j.source].name : 'BBC World News') : '';
+                msg += '   Status: ' + (j.enabled ? '\ud83d\udfe2 Active' : '\ud83d\udd34 Paused') + srcInfo + '\n\n';
             });
             msg += 'To remove: .auto remove <last-6-chars-of-ID>';
             return m.reply(msg);
@@ -422,10 +457,12 @@ module.exports = {
 
         if (sub === 'test') {
             const type = (args[1] || '').toLowerCase();
+            const testSrc = (args[2] || '').toLowerCase();
             if (!VALID_TYPES.includes(type)) return m.reply('\u274c Unknown type. Use .auto types to see options.');
+            if (testSrc && !NEWS_SOURCES[testSrc]) return m.reply('\u274c Unknown source: ' + testSrc + '\n\nUse .auto sources to see available sources.');
             await m.react('\u23f3');
             try {
-                const content = await generateContent(type);
+                const content = await generateContent(type, testSrc || null);
                 if (!content) return m.reply('\u274c Could not generate content for type: ' + type);
                 if (Array.isArray(content)) {
                     for (const payload of content) {
@@ -479,26 +516,33 @@ module.exports = {
             const dup = await db.collection('auto_schedules').findOne({ chatJid: m.from, type: type, time: timeStr });
             if (dup) return m.reply('\u26a0\ufe0f You already have ' + type.toUpperCase() + ' scheduled at ' + timeStr);
 
+            // Optional news source (only relevant for news types)
+            const newsTypes = ['news', 'morningnews', 'eveningnews'];
+            const srcArg = (args[3] || '').toLowerCase();
+            const chosenSrc = (newsTypes.includes(type) && NEWS_SOURCES[srcArg]) ? srcArg : DEFAULT_NEWS_SOURCE;
+
             await db.collection('auto_schedules').insertOne({
                 chatJid: m.from,
                 type: type,
                 time: timeStr,
+                source: chosenSrc,
                 enabled: true,
                 createdAt: new Date(),
                 lastRun: null,
             });
 
+            const srcLabel = newsTypes.includes(type) ? ('\nSource : ' + NEWS_SOURCES[chosenSrc].name) : '';
             return m.reply([
                 '\u2705 Schedule Created!',
                 '',
                 'Type   : ' + type.toUpperCase(),
-                'Time   : ' + timeStr + ' daily',
+                'Time   : ' + timeStr + ' daily' + srcLabel,
                 'Status : \ud83d\udfe2 Active',
                 '',
                 'This chat will receive ' + type + ' every day at ' + timeStr + '.',
                 '',
                 'Use .auto list to see all schedules',
-                'Use .auto test ' + type + ' to preview now',
+                'Use .auto test ' + type + (newsTypes.includes(type) ? ' ' + chosenSrc : '') + ' to preview now',
             ].join('\n'));
         }
 
