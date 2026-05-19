@@ -26,60 +26,103 @@ const CAPTIONS = [
 
 function randItem(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-// ─── Bing image search (no API key needed) ────────────────────────────────────
-function decodeHtmlEntities(str) {
-    return str.replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'");
+// ─── Domains to BLOCK (stock photos, news faces, random people) ───────────────
+const BLOCKED_DOMAINS = [
+    'shutterstock','gettyimages','istockphoto','alamy','dreamstime',
+    'depositphotos','123rf','adobe.com','fotolia','bigstockphoto',
+    'stockphoto','canstockphoto','pond5','offset.com','vecteezy',
+    'freepik','unsplash','pexels','pixabay',
+    // news/people photos we don't want for generic search
+    'bbc.co','cnn.com','theguardian','nytimes','reuters','apnews',
+    'thepunch','dailypost','vanguardngr','premiumtimes',
+];
+
+// ─── Preferred domains (Pinterest, Twitter media — actual memes) ──────────────
+const PREFERRED_DOMAINS = ['pinimg.com','pbs.twimg.com','i.redd.it','preview.redd.it','lookaside.fbsbx.com','cdninstagram.com'];
+
+function domainOf(url) {
+    try { return new URL(url).hostname; } catch(e) { return ''; }
 }
 
+function isBlocked(url) {
+    var d = domainOf(url).toLowerCase();
+    return BLOCKED_DOMAINS.some(function(b){ return d.indexOf(b) !== -1; });
+}
+
+function isPreferred(url) {
+    var d = domainOf(url).toLowerCase();
+    return PREFERRED_DOMAINS.some(function(p){ return d.indexOf(p) !== -1; });
+}
+
+// ─── HTTP helper ──────────────────────────────────────────────────────────────
 function makeRequest(url, headers) {
     return new Promise(function(resolve, reject) {
         var mod = url.startsWith('https') ? https : http;
-        var opts = {
+        var req = mod.get(url, {
             headers: Object.assign({
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
                 'Accept': 'text/html,*/*',
                 'Accept-Language': 'en-US,en;q=0.9',
             }, headers || {}),
             timeout: 12000,
-        };
-        var req = mod.get(url, opts, function(r) {
+        }, function(r) {
             if ([301,302,303,307,308].indexOf(r.statusCode) !== -1 && r.headers.location) {
                 return makeRequest(r.headers.location, headers).then(resolve).catch(reject);
             }
-            var chunks = []; r.on('data', function(c){ chunks.push(c); }); r.on('end', function(){ resolve({ status: r.statusCode, body: Buffer.concat(chunks), ct: r.headers['content-type'] || '' }); });
+            var chunks = [];
+            r.on('data', function(c){ chunks.push(c); });
+            r.on('end', function(){ resolve({ status: r.statusCode, body: Buffer.concat(chunks), ct: r.headers['content-type'] || '' }); });
         });
         req.on('error', reject);
         req.on('timeout', function(){ req.destroy(); reject(new Error('timeout')); });
     });
 }
 
+function decodeHtmlEntities(str) {
+    return str.replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'");
+}
+
+// ─── Bing image search ────────────────────────────────────────────────────────
 async function searchVawulenceImages(topic) {
-    var query = topic ? (topic + ' vawulence meme naija') : 'vawulence meme naija pepe frog';
-    var url = 'https://www.bing.com/images/async?q=' + encodeURIComponent(query) + '&first=1&count=30&adlt=off&qft=';
+    // Always anchor on "pepe frog vawulence meme" so we never get random people photos
+    var query = topic
+        ? (topic + ' vawulence pepe frog meme naija')
+        : 'vawulence pepe frog meme naija site:pinimg.com OR site:twitter.com OR site:reddit.com';
+
+    var url = 'https://www.bing.com/images/async?q=' + encodeURIComponent(query) + '&first=1&count=40&adlt=off&qft=';
     var r = await makeRequest(url, { 'Referer': 'https://www.bing.com/images/search?q=' + encodeURIComponent(query) });
     var decoded = decodeHtmlEntities(r.body.toString('utf8'));
-    var matches = [...decoded.matchAll(/"murl":"(https?:[^"]{10,})"/g)].map(function(m){ return m[1]; });
-    // Keep proper image URLs
-    return matches.filter(function(u){ return /.(jpg|jpeg|png|webp|gif)/i.test(u) || u.indexOf('pbs.twimg') !== -1 || u.indexOf('fbsbx') !== -1 || u.indexOf('pinimg') !== -1; });
+    var all = [...decoded.matchAll(/"murl":"(https?:[^"]{10,})"/g)].map(function(m){ return m[1]; })
+        .filter(function(u){ return /\.(jpg|jpeg|png|webp|gif)/i.test(u) || u.indexOf('pbs.twimg') !== -1 || u.indexOf('pinimg') !== -1; });
+
+    // Remove blocked domains
+    var clean = all.filter(function(u){ return !isBlocked(u); });
+
+    // Sort: preferred domains first, rest after
+    var preferred = clean.filter(function(u){ return isPreferred(u); });
+    var others    = clean.filter(function(u){ return !isPreferred(u); });
+
+    // Shuffle each group independently then combine: preferred first
+    function shuffle(arr) {
+        for (var i = arr.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+        }
+        return arr;
+    }
+
+    return shuffle(preferred).concat(shuffle(others));
 }
 
 async function downloadImage(url) {
     var r = await makeRequest(url, { 'Referer': 'https://www.bing.com/' });
     if (r.status !== 200) throw new Error('HTTP ' + r.status);
-    if (!r.ct.startsWith('image/')) throw new Error('Not image: ' + r.ct);
-    return { buf: r.body, ct: r.ct };
+    var ct = r.ct.split(';')[0].trim();
+    if (!ct.startsWith('image/')) throw new Error('Not image: ' + ct);
+    return { buf: r.body, ct: ct };
 }
 
-// Shuffle array in place
-function shuffle(arr) {
-    for (var i = arr.length - 1; i > 0; i--) {
-        var j = Math.floor(Math.random() * (i + 1));
-        var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
-    }
-    return arr;
-}
-
-// ─── Fallback local memes (the 3 uploaded images) ────────────────────────────
+// ─── Fallback local memes ─────────────────────────────────────────────────────
 const LOCAL_MEMES = ['vawulence1.jpeg', 'vawulence2.jpeg', 'vawulence3.jpeg'];
 function getLocalMeme() {
     var file = path.join(__dirname, '..', 'assets', 'vawulence', randItem(LOCAL_MEMES));
@@ -91,8 +134,8 @@ function getLocalMeme() {
 module.exports = {
     name: 'vawulence',
     aliases: ['vaw', 'vawy', 'violence'],
-    description: 'Search real vawulence memes online and send with Naija Pidgin caption \ud83d\udc38\ud83d\udd25',
-    usage: '.vawulence [optional topic e.g. "Tinubu" or "NEPA" or "ASUU"]',
+    description: 'Search real Pepe-frog vawulence memes and send with Naija Pidgin caption',
+    usage: '.vawulence [optional topic e.g. Tinubu / NEPA / Arsenal]',
 
     async execute(sock, m, args) {
         var topic = args.length ? args.join(' ').trim() : null;
@@ -103,38 +146,26 @@ module.exports = {
 
         var imgData = null;
 
-        // 1. Try live Bing image search
         try {
             var urls = await searchVawulenceImages(topic);
-            if (urls.length > 5) urls = shuffle(urls).slice(0, 10); // randomize top 10
-
-            for (var i = 0; i < Math.min(urls.length, 6); i++) {
+            for (var i = 0; i < Math.min(urls.length, 8); i++) {
                 try {
                     imgData = await downloadImage(urls[i]);
                     break;
-                } catch (dlErr) {
-                    // try next URL
-                }
+                } catch (_) { /* try next */ }
             }
-        } catch (searchErr) {
-            // fall through to local
-        }
+        } catch (_) { /* fall through */ }
 
-        // 2. Fallback to local meme assets
         if (!imgData) imgData = getLocalMeme();
 
-        // 3. Send
         try {
             if (imgData) {
-                var mimeType = imgData.ct.split(';')[0].trim();
-                if (mimeType === 'image/gif') mimeType = 'image/gif';
-                await sock.sendMessage(m.from, { image: imgData.buf, caption: caption, mimetype: mimeType }, { quoted: m.raw });
-                await m.react('\ud83d\udd25');
+                await sock.sendMessage(m.from, { image: imgData.buf, caption: caption, mimetype: imgData.ct }, { quoted: m.raw });
             } else {
                 await m.reply('\ud83d\udc38\ud83d\udd25 VAWULENCE!!\n\n' + caption);
-                await m.react('\ud83d\udd25');
             }
-        } catch (sendErr) {
+            await m.react('\ud83d\udd25');
+        } catch (_) {
             await m.reply('\ud83d\udc38\ud83d\udd25 VAWULENCE!!\n\n' + caption);
             await m.react('\ud83d\udd25');
         }
