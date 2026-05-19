@@ -1243,13 +1243,17 @@ const PEPE_POOL = [
   "https://i.kym-cdn.com/photos/images/original/001/235/932/9a9.png"
 ];
 
-// ─── Local fallback: 14 hand-verified memes stored in the repo ───────────────
-const LOCAL_MEMES = [
-    'vawulence1.jpeg','vawulence2.jpeg','vawulence3.jpeg',
-    'v4.jpg','v5.png','v6.jpg','v7.webp','v8.jpg',
-    'v9.jpg','v10.jpg','v11.jpg','v12.jpg','v13.jpg','v14.jpg',
-];
+// ─── Local meme folder — grows as owner saves images via .savevaw ────────────
 const MEME_DIR = path.join(__dirname, '..', 'assets', 'vawulence');
+
+function getLocalMemes() {
+    try {
+        if (!fs.existsSync(MEME_DIR)) return [];
+        return fs.readdirSync(MEME_DIR)
+            .filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f))
+            .map(f => path.join(MEME_DIR, f));
+    } catch (_) { return []; }
+}
 
 // ─── Deck shuffle: see ALL 1211 images before any repeats ────────────────────
 let _deck = [];
@@ -1291,6 +1295,7 @@ function downloadUrl(url) {
     });
 }
 
+let _localDeck = [];
 let _localDeck = [];
 function pickLocal() {
     const all = getLocalMemes();
