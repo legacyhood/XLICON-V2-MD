@@ -27,6 +27,19 @@ function countSince(startTime) {
     } catch (_) { return 0; }
 }
 
+// Persist to MongoDB so images survive Railway ephemeral filesystem resets
+async function saveToMongo(filename, buffer, mimetype) {
+    try {
+        const db = await global.getMongoDb().catch(() => null);
+        if (!db) return;
+        await db.collection('vaw_images').updateOne(
+            { _id: filename },
+            { $set: { _id: filename, data: buffer, mimetype, savedAt: new Date() } },
+            { upsert: true }
+        );
+    } catch (_) {}
+}
+
 async function saveImageBuffer(sock, m, target) {
     const buffer = await downloadMediaMessage(
         { message: target.message, key: target.key },
@@ -37,9 +50,10 @@ async function saveImageBuffer(sock, m, target) {
     const mime = target.message?.imageMessage?.mimetype || 'image/jpeg';
     const ext  = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
     if (!fs.existsSync(MEME_DIR)) fs.mkdirSync(MEME_DIR, { recursive: true });
-    // Random sub-ms jitter so concurrent writes never collide on filename
     const ts = Date.now() + Math.floor(Math.random() * 9999);
-    fs.writeFileSync(path.join(MEME_DIR, 'vaw_' + ts + '.' + ext), buffer);
+    const filename = 'vaw_' + ts + '.' + ext;
+    fs.writeFileSync(path.join(MEME_DIR, filename), buffer);
+    saveToMongo(filename, buffer, mime).catch(() => {}); // fire-and-forget backup
     return true;
 }
 
