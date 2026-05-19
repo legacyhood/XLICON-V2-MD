@@ -432,6 +432,7 @@ module.exports = {
                         await sock.sendMessage(m.from, payload);
                         await new Promise(function(r) { setTimeout(r, 800); });
                     }
+                    return; // done — don't fall through to default help
                 } else {
                     return m.reply(content);
                 }
@@ -440,7 +441,7 @@ module.exports = {
             }
         }
 
-                if (sub === 'add') {
+        if (sub === 'add') {
             const type = (args[1] || '').toLowerCase();
             const timeStr = args[2] || '';
 
