@@ -1296,7 +1296,6 @@ function downloadUrl(url) {
 }
 
 let _localDeck = [];
-let _localDeck = [];
 function pickLocal() {
     const all = getLocalMemes();
     if (all.length === 0) return null;
