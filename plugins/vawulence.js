@@ -1250,7 +1250,7 @@ function getLocalMemes() {
     try {
         if (!fs.existsSync(MEME_DIR)) return [];
         return fs.readdirSync(MEME_DIR)
-            .filter(f => /\.(jpg|jpeg|png|gif|webp)$/i.test(f))
+            .filter(f => /\.(jpg|jpeg|png|webp)$/i.test(f)) // GIFs excluded — not renderable as image in WA
             .map(f => path.join(MEME_DIR, f));
     } catch (_) { return []; }
 }
@@ -1259,7 +1259,8 @@ function getLocalMemes() {
 let _deck = [];
 function nextUrl() {
     if (_deck.length === 0) {
-        _deck = PEPE_POOL.slice();
+        // Exclude GIFs — WhatsApp image messages don't render them
+        _deck = PEPE_POOL.filter(u => !/\.gif(\?|$)/i.test(u)).slice();
         for (let i = _deck.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [_deck[i], _deck[j]] = [_deck[j], _deck[i]];
@@ -1286,6 +1287,8 @@ function downloadUrl(url) {
             if (r.statusCode === 404 || r.statusCode === 403) { r.resume(); return reject(new Error('HTTP ' + r.statusCode)); }
             const ct = (r.headers['content-type'] || '').split(';')[0].trim();
             if (!ct.startsWith('image/')) { r.resume(); return reject(new Error('Not image: ' + ct)); }
+            // GIFs can't be sent as WhatsApp image messages — skip them
+            if (ct === 'image/gif') { r.resume(); return reject(new Error('skip gif')); }
             const chunks = [];
             r.on('data', c => chunks.push(c));
             r.on('end', () => resolve({ buf: Buffer.concat(chunks), ct }));
@@ -1304,7 +1307,8 @@ function pickLocal() {
     try {
         const buf = fs.readFileSync(file);
         const ext = file.split('.').pop().toLowerCase();
-        const ct  = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/jpeg';
+        if (ext === 'gif') return null; // skip — can't send GIF as WA image
+        const ct  = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
         return { buf, ct };
     } catch (_) { return null; }
 }
