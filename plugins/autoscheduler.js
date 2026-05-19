@@ -111,20 +111,33 @@ function httpsGet(url) {
 function parseRSS(xml, limit) {
     if (limit === undefined) limit = 5;
     const items = [];
-    // Use RegExp constructor to avoid forward-slash issues in regex literals
-    const itemRe = new RegExp('<item>([\s\S]*?)<\/item>', 'g');
+    // IMPORTANT: use double-backslash in RegExp string args so \s means \s (not just s)
+    const itemRe = new RegExp('<item>([\\s\\S]*?)<\\/item>', 'g');
     let m;
     while ((m = itemRe.exec(xml)) !== null && items.length < limit) {
         const inner = m[1];
         const getTag = function(tag) {
-            const tagRe = new RegExp('<' + tag + '[^>]*>([\s\S]*?)<\/' + tag + '>');
+            const tagRe = new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>');
             const x = tagRe.exec(inner);
             if (!x) return '';
-            return x[1].replace(/<![CDATA[/g, '').replace(/]]>/g, '').trim();
+            return x[1]
+                .replace(/<!\[CDATA\[/g, '')
+                .replace(/\]\]>/g, '')
+                .replace(/<[^>]+>/g, '')
+                .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+                .trim();
         };
         let link = getTag('link');
         if (link.indexOf('?') !== -1) link = link.split('?')[0];
-        items.push({ title: getTag('title'), link: link, desc: getTag('description').slice(0, 120) });
+        // BBC includes <media:thumbnail url="..."/> — bump to 976px for full quality
+        const thumbMatch = inner.match(/<media:thumbnail[^>]+url="([^"]+)"/);
+        let thumbnail = thumbMatch ? thumbMatch[1].replace('/standard/240/', '/standard/976/') : null;
+        items.push({
+            title:     getTag('title'),
+            link:      link,
+            desc:      getTag('description').slice(0, 180),
+            thumbnail: thumbnail,
+        });
     }
     return items;
 }
@@ -184,15 +197,22 @@ async function generateContent(type) {
         try {
             const xml = await httpsGet('https://feeds.bbci.co.uk/news/world/rss.xml');
             const items = parseRSS(xml, 5);
-            let msg = '\ud83c\udf05 Morning News — ' + today + '\n\nTop headlines from BBC World:\n\n';
+            if (!items.length) return '\ud83c\udf05 Morning News\n\nNo headlines found right now.\n\n\ud83d\udcc5 ' + today;
+            const payloads = [];
+            payloads.push({ text: '\ud83c\udf05 *Morning News \u2014 ' + today + '*\n\ud83d\udce1 _BBC World News \u2014 Top 5 Headlines_' });
             items.forEach(function(item, i) {
-                msg += (i + 1) + '. ' + item.title + '\n';
-                if (item.desc) msg += '   ' + item.desc + '\n';
-                msg += '   ' + item.link + '\n\n';
+                const caption = (i + 1) + '. *' + item.title + '*'
+                    + (item.desc ? '\n\n' + item.desc : '')
+                    + (item.link ? '\n\n\ud83d\udd17 ' + item.link : '');
+                if (item.thumbnail) {
+                    payloads.push({ image: { url: item.thumbnail }, caption: caption });
+                } else {
+                    payloads.push({ text: caption });
+                }
             });
-            return msg.trim();
+            return payloads;
         } catch (e) {
-            return '\ud83c\udf05 Morning News\n\nUnable to fetch news right now. Check back later!\n\n\ud83d\udcc5 ' + today;
+            return '\ud83c\udf05 Morning News\n\nUnable to fetch news right now.\n\n\ud83d\udcc5 ' + today;
         }
     }
 
@@ -200,19 +220,26 @@ async function generateContent(type) {
         try {
             const xml = await httpsGet('https://feeds.bbci.co.uk/news/world/rss.xml');
             const items = parseRSS(xml, 5);
-            let msg = '\ud83c\udfd9 Evening News — ' + today + '\n\nBBC World — Evening Edition:\n\n';
+            if (!items.length) return '\ud83c\udfd9 Evening News\n\nNo headlines found right now.\n\n\ud83d\udcc5 ' + today;
+            const payloads = [];
+            payloads.push({ text: '\ud83c\udfd9 *Evening News \u2014 ' + today + '*\n\ud83d\udce1 _BBC World News \u2014 Evening Edition_' });
             items.forEach(function(item, i) {
-                msg += (i + 1) + '. ' + item.title + '\n';
-                if (item.desc) msg += '   ' + item.desc + '\n';
-                msg += '   ' + item.link + '\n\n';
+                const caption = (i + 1) + '. *' + item.title + '*'
+                    + (item.desc ? '\n\n' + item.desc : '')
+                    + (item.link ? '\n\n\ud83d\udd17 ' + item.link : '');
+                if (item.thumbnail) {
+                    payloads.push({ image: { url: item.thumbnail }, caption: caption });
+                } else {
+                    payloads.push({ text: caption });
+                }
             });
-            return msg.trim();
+            return payloads;
         } catch (e) {
-            return '\ud83c\udfd9 Evening News\n\nUnable to fetch news right now. Check back later!\n\n\ud83d\udcc5 ' + today;
+            return '\ud83c\udfd9 Evening News\n\nUnable to fetch news right now.\n\n\ud83d\udcc5 ' + today;
         }
     }
 
-    return null;
+        return null;
 }
 
 // ── Scheduler engine ──────────────────────────────────────────────────────────
@@ -398,14 +425,22 @@ module.exports = {
             if (!VALID_TYPES.includes(type)) return m.reply('\u274c Unknown type. Use .auto types to see options.');
             await m.react('\u23f3');
             try {
-                const text = await generateContent(type);
-                return m.reply(text || '\u274c Could not generate content for type: ' + type);
+                const content = await generateContent(type);
+                if (!content) return m.reply('\u274c Could not generate content for type: ' + type);
+                if (Array.isArray(content)) {
+                    for (const payload of content) {
+                        await sock.sendMessage(m.from, payload);
+                        await new Promise(function(r) { setTimeout(r, 800); });
+                    }
+                } else {
+                    return m.reply(content);
+                }
             } catch (e) {
                 return m.reply('\u274c Error: ' + e.message);
             }
         }
 
-        if (sub === 'add') {
+                if (sub === 'add') {
             const type = (args[1] || '').toLowerCase();
             const timeStr = args[2] || '';
 
