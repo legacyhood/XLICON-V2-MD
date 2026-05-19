@@ -108,61 +108,136 @@ function httpsGet(url) {
     });
 }
 
-// ── News sources ──────────────────────────────────────────────────────────────
-// Each entry: { name, url, hasImages }
-// hasImages = true means the feed includes <media:thumbnail> per item
-const NEWS_SOURCES = {
-    bbc:        { name: 'BBC World News',    url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                              hasImages: true  },
-    cnn:        { name: 'CNN World News',    url: 'http://rss.cnn.com/rss/edition_world.rss',                                 hasImages: true  },
-    skynews:    { name: 'Sky News World',    url: 'https://feeds.skynews.com/feeds/rss/world.xml',                            hasImages: true  },
-    euronews:   { name: 'Euronews',          url: 'https://www.euronews.com/rss?format=mrss&level=theme&name=news',           hasImages: true  },
-    aljazeera:  { name: 'Al Jazeera',        url: 'https://www.aljazeera.com/xml/rss/all.xml',                                hasImages: false },
-    arise:      { name: 'Arise TV (Nigeria)',url: 'https://www.arise.tv/feed/',                                               hasImages: false },
-};
-const DEFAULT_NEWS_SOURCE = 'bbc';
-const NEWS_SOURCE_KEYS = Object.keys(NEWS_SOURCES);
+// ── News aggregation — all sources, deduplicated, merged ────────────────────
+// Feeds ranked by global editorial weight (lower = higher priority for tie-break)
+const ALL_NEWS_FEEDS = [
+    { key: 'bbc',       name: 'BBC World',   url: 'https://feeds.bbci.co.uk/news/world/rss.xml',                    hasImages: true,  rank: 1 },
+    { key: 'cnn',       name: 'CNN',         url: 'http://rss.cnn.com/rss/edition_world.rss',                       hasImages: true,  rank: 2 },
+    { key: 'skynews',   name: 'Sky News',    url: 'https://feeds.skynews.com/feeds/rss/world.xml',                  hasImages: true,  rank: 3 },
+    { key: 'euronews',  name: 'Euronews',    url: 'https://www.euronews.com/rss?format=mrss&level=theme&name=news', hasImages: true,  rank: 4 },
+    { key: 'aljazeera', name: 'Al Jazeera',  url: 'https://www.aljazeera.com/xml/rss/all.xml',                      hasImages: false, rank: 5 },
+    { key: 'arise',     name: 'Arise TV',    url: 'https://www.arise.tv/feed/',                                     hasImages: false, rank: 6 },
+];
 
+// Common words that don't help identify a story's topic
+const STOP_WORDS = new Set([
+    'the','a','an','is','in','on','at','to','of','and','or','for','with',
+    'this','that','it','as','was','are','were','be','by','from','has','have',
+    'had','but','not','they','he','she','we','you','its','their','his','her',
+    'our','into','after','before','over','under','new','says','say','said',
+    'more','than','about','after','when','than','been','will','could','would',
+    'also','amid','amid','amid','what','who','how','why','which','where',
+]);
 
-function parseRSS(xml, limit) {
-    if (limit === undefined) limit = 5;
-    const items = [];
-    // IMPORTANT: use double-backslash in RegExp string args so \s means \s (not just s)
-    const itemRe = new RegExp('<item>([\\s\\S]*?)<\\/item>', 'g');
-    let m;
-    while ((m = itemRe.exec(xml)) !== null && items.length < limit) {
-        const inner = m[1];
-        const getTag = function(tag) {
-            const tagRe = new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)<\\/' + tag + '>');
-            const x = tagRe.exec(inner);
-            if (!x) return '';
-            return x[1]
-                .replace(/<!\[CDATA\[/g, '')
-                .replace(/\]\]>/g, '')
-                .replace(/<[^>]+>/g, '')
-                .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
-                .trim();
-        };
-        let link = getTag('link');
-        if (link.indexOf('?') !== -1) link = link.split('?')[0];
-        // BBC includes <media:thumbnail url="..."/> — bump to 976px for full quality
-        const thumbMatch = inner.match(/<media:thumbnail[^>]+url="([^"]+)"/);
-        let thumbnail = thumbMatch ? thumbMatch[1].replace('/standard/240/', '/standard/976/') : null;
-        items.push({
-            title:     getTag('title'),
-            link:      link,
-            desc:      getTag('description').slice(0, 180),
-            thumbnail: thumbnail,
-        });
+function tokenizeTitle(title) {
+    return title.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(function(w) { return w.length > 3 && !STOP_WORDS.has(w); });
+}
+
+// Overlap coefficient — what fraction of the shorter title's words appear in the other
+function titleSimilarity(a, b) {
+    const ta = new Set(tokenizeTitle(a));
+    const tb = new Set(tokenizeTitle(b));
+    if (ta.size === 0 || tb.size === 0) return 0;
+    let common = 0;
+    ta.forEach(function(w) { if (tb.has(w)) common++; });
+    return common / Math.min(ta.size, tb.size);
+}
+
+// Fetch one feed, parse up to 10 items, tag each with its source
+async function fetchOneFeed(feed) {
+    try {
+        const xml = await Promise.race([
+            httpsGet(feed.url),
+            new Promise(function(_, rej) { setTimeout(function() { rej(new Error('timeout')); }, 8000); })
+        ]);
+        const items = parseRSS(xml, 10);
+        return items.map(function(item) { return Object.assign({}, item, { feedKey: feed.key, feedName: feed.name, feedRank: feed.rank, feedHasImg: feed.hasImages }); });
+    } catch (e) {
+        return [];
     }
-    return items;
+}
+
+// Aggregate, deduplicate, and return top N merged stories
+async function fetchAggregatedNews(count) {
+    if (count === undefined) count = 5;
+    // Fetch all feeds in parallel
+    const results = await Promise.all(ALL_NEWS_FEEDS.map(fetchOneFeed));
+    const allItems = [];
+    results.forEach(function(arr) { arr.forEach(function(i) { allItems.push(i); }); });
+
+    if (!allItems.length) return [];
+
+    // Group items that cover the same story using title similarity
+    const SIMILARITY_THRESHOLD = 0.40;
+    const groups = [];
+    const assigned = new Array(allItems.length).fill(false);
+
+    for (var i = 0; i < allItems.length; i++) {
+        if (assigned[i]) continue;
+        var group = [allItems[i]];
+        assigned[i] = true;
+        for (var j = i + 1; j < allItems.length; j++) {
+            if (assigned[j]) continue;
+            if (titleSimilarity(allItems[i].title, allItems[j].title) >= SIMILARITY_THRESHOLD) {
+                group.push(allItems[j]);
+                assigned[j] = true;
+            }
+        }
+        groups.push(group);
+    }
+
+    // Score: primary = how many outlets covered it (more = more important/trending)
+    // Secondary = rank of best source (lower is better)
+    groups.sort(function(a, b) {
+        var diff = b.length - a.length;
+        if (diff !== 0) return diff;
+        var aRank = Math.min.apply(null, a.map(function(x) { return x.feedRank; }));
+        var bRank = Math.min.apply(null, b.map(function(x) { return x.feedRank; }));
+        return aRank - bRank;
+    });
+
+    // Build merged story objects
+    var stories = [];
+    for (var gi = 0; gi < Math.min(count, groups.length); gi++) {
+        var group = groups[gi];
+        // Sort group members by feed rank so best source is first
+        group.sort(function(a, b) { return a.feedRank - b.feedRank; });
+
+        // Best title = from highest-ranked source
+        var bestTitle = group[0].title;
+
+        // Best description = longest non-empty one
+        var bestDesc = '';
+        group.forEach(function(item) { if (item.desc && item.desc.length > bestDesc.length) bestDesc = item.desc; });
+
+        // Best image = first one available, preferring image-capable feeds
+        var thumbnail = null;
+        group.forEach(function(item) { if (!thumbnail && item.thumbnail) thumbnail = item.thumbnail; });
+
+        // Collect unique links per source (skip empty or duplicate links)
+        var seenLinks = {};
+        var sources = [];
+        group.forEach(function(item) {
+            if (item.link && !seenLinks[item.link]) {
+                seenLinks[item.link] = true;
+                sources.push({ name: item.feedName, link: item.link });
+            }
+        });
+
+        // Count unique outlets
+        var outletCount = group.length;
+
+        stories.push({ title: bestTitle, desc: bestDesc, thumbnail: thumbnail, sources: sources, outletCount: outletCount });
+    }
+    return stories;
 }
 
 // ── Content generators ────────────────────────────────────────────────────────
 
-async function generateContent(type, source) {
-    // Resolve news source — defaults to bbc
-    const srcKey = (source && NEWS_SOURCES[source]) ? source : DEFAULT_NEWS_SOURCE;
-    const src = NEWS_SOURCES[srcKey];
+async function generateContent(type) {
     const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
     if (type === 'bible') {
@@ -269,7 +344,7 @@ async function fireJob(job) {
     if (!activeSock) return;
     try {
         const riddle = job.type === 'riddle' ? rand(RIDDLES) : null;
-        const content = await generateContent(job.type, job.source);
+        const content = await generateContent(job.type);
         if (!content) return;
         // content can be a plain string OR an array of message payloads (used by news)
         if (Array.isArray(content)) {
@@ -413,13 +488,7 @@ module.exports = {
         }
 
         if (sub === 'sources') {
-            const lines = ['\ud83d\udce1 *Available News Sources*', '', 'Use with: .auto add morningnews HH:MM <source>', 'Or test:  .auto test morningnews <source>', ''];
-            Object.entries(NEWS_SOURCES).forEach(function(entry) {
-                const key = entry[0]; const s = entry[1];
-                lines.push((s.hasImages ? '\ud83d\uddbc' : '\ud83d\udcdd') + ' *' + key + '* \u2014 ' + s.name + (s.hasImages ? ' (with images)' : ' (text only)'));
-            });
-            lines.push('', 'Default: *bbc*', '', 'Examples:', '.auto add morningnews 07:00 cnn', '.auto add eveningnews 18:00 aljazeera', '.auto test morningnews skynews');
-            return m.reply(lines.join('\n'));
+            return m.reply('\ud83d\udce1 *News Sources*\n\nNews is now aggregated from *6 outlets simultaneously*:\n\n\ud83d\uddbc BBC World\n\ud83d\uddbc CNN\n\ud83d\uddbc Sky News\n\ud83d\uddbc Euronews\n\ud83d\udcdd Al Jazeera\n\ud83d\udcdd Arise TV Nigeria\n\nStories covered by multiple outlets are merged into one post with all their links. The most widely-covered stories appear first.');
         }
 
         if (sub === 'list') {
@@ -430,9 +499,7 @@ module.exports = {
             jobs.forEach(function(j, i) {
                 msg += (i + 1) + '. ' + j.type.toUpperCase() + ' at ' + j.time + '\n';
                 msg += '   ID: ' + String(j._id).slice(-6) + '\n';
-                const newsTypesList = ['news','morningnews','eveningnews'];
-                const srcInfo = newsTypesList.includes(j.type) ? '\n   Source: ' + (NEWS_SOURCES[j.source] ? NEWS_SOURCES[j.source].name : 'BBC World News') : '';
-                msg += '   Status: ' + (j.enabled ? '\ud83d\udfe2 Active' : '\ud83d\udd34 Paused') + srcInfo + '\n\n';
+                msg += '   Status: ' + (j.enabled ? '\ud83d\udfe2 Active' : '\ud83d\udd34 Paused') + '\n\n';
             });
             msg += 'To remove: .auto remove <last-6-chars-of-ID>';
             return m.reply(msg);
@@ -457,12 +524,10 @@ module.exports = {
 
         if (sub === 'test') {
             const type = (args[1] || '').toLowerCase();
-            const testSrc = (args[2] || '').toLowerCase();
             if (!VALID_TYPES.includes(type)) return m.reply('\u274c Unknown type. Use .auto types to see options.');
-            if (testSrc && !NEWS_SOURCES[testSrc]) return m.reply('\u274c Unknown source: ' + testSrc + '\n\nUse .auto sources to see available sources.');
             await m.react('\u23f3');
             try {
-                const content = await generateContent(type, testSrc || null);
+                const content = await generateContent(type);
                 if (!content) return m.reply('\u274c Could not generate content for type: ' + type);
                 if (Array.isArray(content)) {
                     for (const payload of content) {
@@ -516,33 +581,26 @@ module.exports = {
             const dup = await db.collection('auto_schedules').findOne({ chatJid: m.from, type: type, time: timeStr });
             if (dup) return m.reply('\u26a0\ufe0f You already have ' + type.toUpperCase() + ' scheduled at ' + timeStr);
 
-            // Optional news source (only relevant for news types)
-            const newsTypes = ['news', 'morningnews', 'eveningnews'];
-            const srcArg = (args[3] || '').toLowerCase();
-            const chosenSrc = (newsTypes.includes(type) && NEWS_SOURCES[srcArg]) ? srcArg : DEFAULT_NEWS_SOURCE;
-
             await db.collection('auto_schedules').insertOne({
                 chatJid: m.from,
                 type: type,
                 time: timeStr,
-                source: chosenSrc,
                 enabled: true,
                 createdAt: new Date(),
                 lastRun: null,
             });
 
-            const srcLabel = newsTypes.includes(type) ? ('\nSource : ' + NEWS_SOURCES[chosenSrc].name) : '';
             return m.reply([
                 '\u2705 Schedule Created!',
                 '',
                 'Type   : ' + type.toUpperCase(),
-                'Time   : ' + timeStr + ' daily' + srcLabel,
+                'Time   : ' + timeStr + ' daily',
                 'Status : \ud83d\udfe2 Active',
                 '',
                 'This chat will receive ' + type + ' every day at ' + timeStr + '.',
                 '',
                 'Use .auto list to see all schedules',
-                'Use .auto test ' + type + (newsTypes.includes(type) ? ' ' + chosenSrc : '') + ' to preview now',
+                'Use .auto test ' + type + ' to preview now',
             ].join('\n'));
         }
 
