@@ -6,8 +6,8 @@ const fs   = require('fs');
 const MEME_DIR = path.join(__dirname, '..', 'assets', 'vawulence');
 
 // ─── Batch sessions: Map<senderJid, { startTime, timer }> ────────────────────
-// Count is derived from actual files saved (timestamp in filename) — not an
-// in-memory counter — so concurrent saves and Railway restarts can't corrupt it.
+// Count is read from actual files on disk (vaw_<ts>.ext) so concurrent saves
+// and Railway restarts cannot corrupt the tally.
 const batchSessions = new Map();
 
 function countAll() {
@@ -17,7 +17,6 @@ function countAll() {
     } catch (_) { return 0; }
 }
 
-// Count files saved SINCE a given timestamp (encoded in vaw_<ts>.ext filenames)
 function countSince(startTime) {
     try {
         if (!fs.existsSync(MEME_DIR)) return 0;
@@ -28,7 +27,7 @@ function countSince(startTime) {
     } catch (_) { return 0; }
 }
 
-async function saveImage(sock, m, target) {
+async function saveImageBuffer(sock, m, target) {
     const buffer = await downloadMediaMessage(
         { message: target.message, key: target.key },
         'buffer', {}, sock
@@ -37,10 +36,9 @@ async function saveImage(sock, m, target) {
 
     const mime = target.message?.imageMessage?.mimetype || 'image/jpeg';
     const ext  = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
-
     if (!fs.existsSync(MEME_DIR)) fs.mkdirSync(MEME_DIR, { recursive: true });
-    // Small random jitter so concurrent saves get unique timestamps
-    const ts = Date.now() + Math.floor(Math.random() * 999);
+    // Random sub-ms jitter so concurrent writes never collide on filename
+    const ts = Date.now() + Math.floor(Math.random() * 9999);
     fs.writeFileSync(path.join(MEME_DIR, 'vaw_' + ts + '.' + ext), buffer);
     return true;
 }
@@ -48,8 +46,22 @@ async function saveImage(sock, m, target) {
 module.exports = {
     name: 'savevaw',
     aliases: ['addvaw', 'addvawulence'],
-    description: 'Owner-only: save vawulence images into the bot pool. Supports single and batch mode.',
-    usage: '.savevaw | .savevaw batch | .savevaw done',
+    description: 'Owner-only: save vawulence images. Supports single save and batch mode.',
+    usage: '.savevaw | .savevaw batch | .savevaw done | .savevaw count',
+
+    // ── Called by index.js for every image the owner sends (with OR without caption)
+    // This is what makes WhatsApp albums work: only the first image in an album
+    // gets the .savevaw caption; the rest arrive captionless and are caught here.
+    async onOwnerImage(sock, m) {
+        if (!m.isMedia || m.type !== 'imageMessage') return;
+        const session = batchSessions.get(m.sender);
+        if (!session) return; // only active during batch mode
+        // Don't double-save: if this message also triggered execute() (had .savevaw caption)
+        // execute() will handle it. We only process captionless images here.
+        if (m.body && m.body.trim()) return;
+        const ok = await saveImageBuffer(sock, m, m);
+        if (ok) await m.react('\u2705').catch(() => {});
+    },
 
     async execute(sock, m, args) {
         if (!m.isOwner) return m.reply('\u274c Only the bot owner can save vawulence images.');
@@ -76,7 +88,11 @@ module.exports = {
         if (sub === 'count') {
             const session = batchSessions.get(m.sender);
             if (session) {
-                return m.reply('\u23f3 Batch active — saved so far: *' + countSince(session.startTime) + '* | Total pool: *' + countAll() + '*');
+                return m.reply(
+                    '\u23f3 Batch active\n' +
+                    '\ud83d\udcf8 Saved so far: *' + countSince(session.startTime) + '*\n' +
+                    '\ud83d\udcc2 Total pool: *' + countAll() + '*'
+                );
             }
             return m.reply('\ud83d\udcc2 Total images in vawulence pool: *' + countAll() + '*');
         }
@@ -109,11 +125,12 @@ module.exports = {
             return m.reply(
                 '\ud83d\udc38\ud83d\udce6 *Batch mode ON!* (3 min window)\n\n' +
                 '*How to save many images at once:*\n' +
-                '1\ufe0f\u20e3 Tap attachment \u2192 pick ALL the images you want\n' +
-                '2\ufe0f\u20e3 Type *.savevaw* as the caption (applies to all)\n' +
-                '3\ufe0f\u20e3 Send \u2014 each saves silently with \u2705\n\n' +
-                '*.savevaw count* \u2014 check progress\n' +
-                '*.savevaw done* \u2014 end session and see summary'
+                '1\ufe0f\u20e3 Send *.savevaw batch*\n' +
+                '2\ufe0f\u20e3 Open the attachment picker\n' +
+                '3\ufe0f\u20e3 Select ALL the images you want\n' +
+                '4\ufe0f\u20e3 Send them (no caption needed!) \u2014 each saves with \u2705\n\n' +
+                '*.savevaw count* \u2014 check progress mid-batch\n' +
+                '*.savevaw done* \u2014 end session + see summary'
             );
         }
 
@@ -122,25 +139,23 @@ module.exports = {
                      : (m.quoted && m.quoted.type === 'imageMessage' && m.quoted.isMedia) ? m.quoted
                      : null;
 
-        // ── No image, no recognised sub-command → show help ──────────────────
         if (!target) {
             return m.reply(
                 '\ud83d\udcf8 *Vawulence Image Saver*\n\n' +
                 '*Single image:*\n' +
-                '\u2022 Send image + *.savevaw* caption\n' +
-                '\u2022 Or reply to any image with *.savevaw*\n\n' +
-                '*Multiple images at once:*\n' +
-                '\u2022 *.savevaw batch* \u2014 start session\n' +
-                '\u2022 *.savevaw done* \u2014 end + see summary\n' +
+                '\u2022 Send image with *.savevaw* caption\n' +
+                '\u2022 OR reply to any image with *.savevaw*\n\n' +
+                '*Multiple images:*\n' +
+                '\u2022 *.savevaw batch* \u2192 send images (no caption needed) \u2192 *.savevaw done*\n' +
                 '\u2022 *.savevaw count* \u2014 check progress\n\n' +
                 '\ud83d\udcc2 Pool: *' + countAll() + '* saved images'
             );
         }
 
-        // ── Save the image ───────────────────────────────────────────────────
+        // ── Save the image (single or first-of-album with caption) ───────────
         const inBatch = batchSessions.has(m.sender);
         await m.react('\u23f3');
-        const ok = await saveImage(sock, m, target);
+        const ok = await saveImageBuffer(sock, m, target);
 
         if (!ok) {
             await m.react('\u274c');
@@ -148,13 +163,12 @@ module.exports = {
         }
 
         if (inBatch) {
-            // Silent during batch — just tick, no reply spam
-            await m.react('\u2705');
+            await m.react('\u2705'); // silent during batch
         } else {
             await m.react('\u2705');
             await m.reply(
                 '\u2705 *Saved!* \ud83d\udcc2 Pool: *' + countAll() + '* images\n\n' +
-                '_Tip: .savevaw batch to save many images at once_'
+                '_Tip: .savevaw batch to bulk-save without captions_'
             );
         }
     },
