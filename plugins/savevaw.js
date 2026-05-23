@@ -5,6 +5,20 @@ const fs    = require('fs');
 const https = require('https');
 
 const MEME_DIR   = path.join(__dirname, '..', 'assets', 'vawulence');
+
+// Drop the old vaw_images MongoDB collection (legacy — replaced by GitHub storage).
+// Runs once silently on startup to free up MongoDB space.
+setTimeout(async () => {
+    try {
+        const db = await global.getMongoDb().catch(() => null);
+        if (!db) return;
+        const colls = await db.listCollections({ name: 'vaw_images' }).toArray();
+        if (colls.length > 0) {
+            await db.collection('vaw_images').drop();
+            console.log('[savevaw] Dropped legacy vaw_images collection from MongoDB.');
+        }
+    } catch (_) {}
+}, 8000);
 const GITHUB_REPO = 'legacyhood/XLICON-V2-MD';
 
 // ─── Batch sessions: Map<senderJid, { startTime, timer, images[] }> ──────────
