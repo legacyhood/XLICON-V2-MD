@@ -88,8 +88,8 @@ function extractVideoThumbnail(videoBuffer) {
 
 // ── MongoDB helpers ───────────────────────────────────────────────────────────
 
-const MAX_PER_CONTACT = 10;
-const MAX_TOTAL_DOCS  = 200;
+const MAX_PER_CONTACT = 5;   // max 5 statuses kept per contact
+const MAX_TOTAL_DOCS  = 80;   // max 80 contacts in cache at once
 
 async function saveToMongo(senderJid, entries) {
     const db = await getDb();
